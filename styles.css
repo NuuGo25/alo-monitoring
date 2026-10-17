@@ -1,0 +1,639 @@
+/* alo monitoring — prototipe tampilan
+   Warna utama "biru karbon" diambil dari tinta salinan surat jalan yang dipakai mitra sebelum ada sistem.
+   Merah/kuning/hijau hanya untuk status stok, selalu disertai teks. */
+
+:root {
+  --bg: #EDF0EF;
+  --surface: #FFFFFF;
+  --surface-2: #F6F8F8;
+  --ink: #18262B;
+  --ink-2: #51626A;
+  --line: #D6DDDE;
+  --line-2: #B9C4C6;
+
+  --carbon: #2A48B0;
+  --carbon-dark: #1E3688;
+  --carbon-tint: #E8EDFB;
+  --carbon-ring: #BFCBF3;
+
+  --kritis: #B42318;
+  --kritis-bar: #D64534;
+  --kritis-tint: #FCEBE9;
+  --kritis-line: #F1B8B1;
+  --hampir: #7F5300;
+  --hampir-bar: #E0A230;
+  --hampir-tint: #FDF3DD;
+  --hampir-line: #EBCB85;
+  --normal: #1F6B45;
+  --normal-bar: #3B9A68;
+  --normal-tint: #E4F2E9;
+
+  --r-s: 4px;
+  --r-m: 8px;
+  --r-l: 12px;
+
+  --font: "Atkinson Hyperlegible Next", "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color-scheme: light;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+/* Atribut hidden harus menang atas display:flex/grid milik komponen (mis. .toast) */
+[hidden] { display: none !important; }
+
+body {
+  margin: 0;
+  font-family: var(--font);
+  font-size: 1rem;
+  line-height: 1.5;
+  color: var(--ink);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+}
+body.riwayat-calendar-open { padding-bottom: 192px; }
+
+h1, h2, h3 { margin: 0; line-height: 1.2; }
+h1 { font-size: 1.75rem; font-weight: 800; letter-spacing: -0.015em; }
+h2 { font-size: 1.125rem; font-weight: 700; }
+h3 { font-size: 1rem; font-weight: 700; }
+p { margin: 0; }
+a { color: var(--carbon); }
+a:hover { color: var(--carbon-dark); }
+fieldset { margin: 0; padding: 0; border: 0; min-width: 0; }
+legend { padding: 0; }
+
+:focus-visible { outline: 3px solid var(--carbon); outline-offset: 2px; }
+h1:focus, main:focus { outline: none; }
+
+.muted { color: var(--ink-2); }
+.small { font-size: 0.8125rem; }
+.num { font-variant-numeric: tabular-nums; }
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+.skip { position: absolute; left: 16px; top: -48px; z-index: 100; padding: 8px 12px; background: var(--ink); color: #fff; border-radius: var(--r-m); }
+.skip:focus { top: 8px; color: #fff; }
+
+/* ---------- pita prototipe ---------- */
+.demo-strip {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 4px 12px;
+  padding: 6px 16px;
+  background: repeating-linear-gradient(-45deg, #FFF6D6 0 10px, #FBEFC4 10px 20px);
+  border-bottom: 1px solid #E7D48F;
+  font-size: 0.875rem; color: #5C4700; text-align: center;
+}
+.link-btn {
+  padding: 4px; border: 0; background: none; font: inherit; font-weight: 700;
+  color: inherit; text-decoration: underline; text-underline-offset: 3px; cursor: pointer;
+}
+
+/* ---------- header ---------- */
+.topbar { position: sticky; top: 0; z-index: 20; background: var(--surface); border-bottom: 1px solid var(--line); }
+.topbar-inner { max-width: 1200px; height: 64px; margin: 0 auto; padding: 0 24px; display: flex; align-items: center; gap: 28px; }
+
+.brand { display: flex; align-items: center; gap: 8px; color: var(--ink); text-decoration: none; }
+.brand:hover { color: var(--ink); }
+.brand-icon { width: 26px; height: 26px; fill: none; stroke: var(--carbon); stroke-width: 2; }
+.brand-mark { font-size: 1.5rem; font-weight: 800; letter-spacing: -0.04em; line-height: 1; }
+.brand-sub { font-size: 0.875rem; color: var(--ink-2); padding-top: 3px; }
+
+.mainnav { display: flex; align-self: stretch; gap: 4px; }
+.mainnav a {
+  display: flex; align-items: center; padding: 0 12px; margin-bottom: -1px;
+  color: var(--ink-2); font-weight: 700; text-decoration: none;
+  border-bottom: 3px solid transparent;
+}
+.mainnav a:hover { color: var(--ink); }
+.mainnav a[aria-current="page"] { color: var(--ink); border-bottom-color: var(--carbon); }
+
+.top-actions { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+
+/* Pemilih gudang (KF-10): penanda tempat, bukan hiasan — karena itu selalu terlihat di header. */
+.gudang-pilih { flex: 0 0 auto; }
+.gudang-pilih select {
+  min-height: 40px; padding: 0 30px 0 12px; max-width: 220px;
+  border-color: var(--ink); font-weight: 700; cursor: pointer;
+}
+.judul-gudang { color: var(--ink-2); font-weight: 400; }
+.tag-gudang {
+  display: inline-flex; align-items: center; padding: 3px 8px; border-radius: var(--r-s);
+  background: var(--ink); color: #fff; font-size: 0.75rem; font-weight: 700;
+  letter-spacing: 0.02em; white-space: nowrap;
+}
+.rincian { margin-top: 4px; font-size: 0.8125rem; font-weight: 400; color: var(--ink-2); }
+.jenis.pindah { color: var(--ink-2); }
+
+.sync {
+  display: inline-flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 12px;
+  border: 1px solid var(--line); border-radius: 999px; background: var(--surface);
+  font: inherit; font-size: 0.8125rem; color: var(--ink-2); cursor: pointer;
+}
+.sync:hover { border-color: var(--line-2); color: var(--ink); }
+.sync .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--normal-bar); flex: none; }
+.sync.gagal { background: var(--kritis-tint); border-color: var(--kritis-line); color: var(--kritis); font-weight: 700; }
+.sync.gagal .dot { background: var(--kritis-bar); }
+
+/* ---------- tombol ---------- */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 44px; padding: 0 18px;
+  border: 1px solid transparent; border-radius: var(--r-m);
+  font: inherit; font-size: 0.9375rem; font-weight: 700; line-height: 1.2;
+  text-decoration: none; white-space: nowrap; cursor: pointer;
+}
+.btn svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.btn-primary { background: var(--carbon); color: #fff; }
+.btn-primary:hover { background: var(--carbon-dark); color: #fff; }
+.btn-primary:disabled { background: #98A3AE; cursor: not-allowed; }
+.btn-secondary { background: var(--surface); border-color: var(--line-2); color: var(--ink); }
+.btn-secondary:hover { border-color: var(--ink); color: var(--ink); }
+.btn-quiet { background: var(--carbon-tint); color: var(--carbon-dark); }
+.btn-quiet:hover { background: #D7E0F8; color: var(--carbon-dark); }
+.btn-sm { min-height: 36px; padding: 0 12px; font-size: 0.875rem; }
+.btn-lg { min-height: 52px; padding: 0 24px; font-size: 1rem; }
+.icon-btn {
+  width: 40px; height: 40px; flex: none; border: 0; border-radius: var(--r-m);
+  background: transparent; color: var(--ink-2); font-size: 1.75rem; line-height: 1; cursor: pointer;
+}
+.icon-btn:hover { background: var(--surface-2); color: var(--ink); }
+
+/* ---------- tata letak halaman ---------- */
+main { max-width: 1200px; margin: 0 auto; padding: 32px 24px 96px; }
+.page-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 24px; }
+.page-head p { margin-top: 6px; font-size: 1.0625rem; color: var(--ink-2); max-width: 70ch; }
+
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-l); overflow: hidden; }
+.history-panel { overflow: visible; }
+.history-panel .history-toolbar { border-radius: var(--r-l) var(--r-l) 0 0; }
+.panel-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--line); }
+.panel-foot { padding: 12px 20px; border-top: 1px solid var(--line); font-size: 0.9375rem; }
+
+/* ---------- label spesifikasi: unsur khas ---------- */
+/* Sekat dibuat dari celah 1px di atas latar garis, supaya tetap utuh saat label terlipat ke baris kedua. */
+.spec {
+  display: inline-flex; flex-wrap: wrap; gap: 1px; max-width: 100%;
+  border: 1px solid var(--ink); border-radius: var(--r-s); overflow: hidden;
+  background: var(--line-2); font-size: 0.875rem; line-height: 1.2;
+}
+.spec > span { flex: 1 0 auto; padding: 5px 8px; background: var(--surface); white-space: nowrap; text-align: center; }
+.spec > span:first-child { background: var(--ink); color: #fff; font-weight: 700; letter-spacing: 0.02em; }
+.spec small { margin-left: 2px; font-size: 0.75rem; color: var(--ink-2); }
+.spec > span.empty { color: #9AA7AC; }
+.spec > span.empty:first-child { background: var(--line); color: var(--ink-2); }
+
+.kode { font-weight: 700; font-variant-numeric: tabular-nums; color: var(--ink); white-space: nowrap; }
+.id-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+
+.badge {
+  display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px;
+  border-radius: 999px; font-size: 0.8125rem; font-weight: 700; white-space: nowrap;
+}
+.badge::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.badge.kritis { background: var(--kritis-tint); color: var(--kritis); }
+.badge.hampir { background: var(--hampir-tint); color: var(--hampir); }
+.badge.normal { background: var(--normal-tint); color: var(--normal); }
+
+/* ---------- dashboard ---------- */
+.dash-grid { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 24px; align-items: start; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  min-height: 34px; padding: 0 12px; border: 1px solid var(--line-2); border-radius: 999px;
+  background: var(--surface); font: inherit; font-size: 0.875rem; font-weight: 700; color: var(--ink-2); cursor: pointer;
+}
+.chip:hover { border-color: var(--ink); color: var(--ink); }
+.chip[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: #fff; }
+
+.restock { list-style: none; margin: 0; padding: 0; }
+.restock li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 20px; align-items: center; padding: 18px 20px; border-top: 1px solid var(--line); }
+.restock li:first-child { border-top: 0; }
+.restock .kepala { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-bottom: 8px; }
+
+.meter { position: relative; max-width: 420px; height: 8px; margin: 12px 0 6px; border-radius: 999px; background: #E3E8E9; }
+.meter-fill { position: absolute; top: 0; bottom: 0; left: 0; border-radius: 999px; }
+.meter-fill.kritis { background: var(--kritis-bar); }
+.meter-fill.hampir { background: var(--hampir-bar); }
+.meter-fill.normal { background: var(--normal-bar); }
+.meter-min { position: absolute; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; border-radius: 1px; background: var(--ink); }
+.meter-text { font-size: 0.875rem; color: var(--ink-2); }
+.meter-text strong { font-size: 1rem; color: var(--ink); }
+
+.feed { list-style: none; margin: 0; padding: 6px 0; }
+.feed li { display: grid; grid-template-columns: 52px minmax(0, 1fr) auto; gap: 10px; align-items: baseline; padding: 10px 20px; font-size: 0.9375rem; }
+.feed .desc { display: block; font-size: 0.8125rem; color: var(--ink-2); }
+.qty { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.qty.masuk { color: var(--normal); }
+.qty.keluar { color: var(--ink); }
+
+.empty-state { max-width: 46ch; margin: 0 auto; padding: 40px 24px; text-align: center; }
+.empty-state h3 { margin-bottom: 6px; font-size: 1.0625rem; }
+.empty-state p { margin-bottom: 16px; color: var(--ink-2); }
+.empty-state.compact { padding: 28px 20px; }
+
+/* ---------- toolbar, input, tabel ---------- */
+.toolbar { display: flex; flex-wrap: wrap; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--line); }
+.toolbar .search { flex: 1 1 280px; }
+.toolbar .toolbar-select { flex: 0 0 200px; }
+.history-primary { display: grid; grid-template-columns: minmax(280px, 1fr) 220px; gap: 12px; width: 100%; }
+.date-toolbar { display: flex; align-items: flex-end; gap: 12px; width: 100%; padding-top: 2px; }
+.calendar-shell { position: relative; flex: 0 1 340px; }
+.date-toolbar-label { display: block; margin-bottom: 4px; font-size: 0.75rem; font-weight: 700; color: var(--ink-2); }
+.date-trigger {
+  display: grid; grid-template-columns: 20px minmax(0, 1fr) 20px; align-items: center; gap: 10px;
+  width: 100%; min-height: 44px; padding: 0 12px; border: 1px solid var(--line-2); border-radius: var(--r-m);
+  background: var(--surface); color: var(--ink); font: inherit; font-weight: 700; text-align: left; cursor: pointer;
+}
+.date-trigger:hover { border-color: #8E9DA2; }
+.date-trigger:focus-visible { outline: none; border-color: var(--carbon); box-shadow: 0 0 0 3px var(--carbon-ring); }
+.date-trigger svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.date-trigger .chevron { width: 18px; height: 18px; transition: transform 0.15s ease; }
+.date-trigger[aria-expanded="true"] .chevron { transform: rotate(180deg); }
+.toolbar-clear { min-height: 44px; }
+
+.calendar-popover {
+  position: absolute; top: calc(100% + 8px); left: 0; z-index: 20; width: min(336px, calc(100vw - 48px)); padding: 14px;
+  border: 1px solid var(--line-2); border-radius: var(--r-l); background: var(--surface); box-shadow: 0 12px 28px rgba(17, 37, 45, 0.16);
+}
+.calendar-mode { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; border-radius: var(--r-m); background: var(--surface-2); }
+.calendar-mode button { min-height: 40px; border: 0; border-radius: calc(var(--r-m) - 2px); background: transparent; color: var(--ink-2); font: inherit; font-size: 0.8125rem; font-weight: 700; cursor: pointer; }
+.calendar-mode button[aria-pressed="true"] { background: var(--surface); color: var(--carbon); box-shadow: 0 1px 3px rgba(17, 37, 45, 0.14); }
+.calendar-mode button:focus-visible, .calendar-nav:focus-visible, .calendar-day:focus-visible { outline: 3px solid var(--carbon-ring); outline-offset: 1px; }
+.calendar-head { display: grid; grid-template-columns: 44px minmax(0, 1fr) 44px; align-items: center; margin-top: 10px; }
+.calendar-head strong { text-align: center; text-transform: capitalize; }
+.calendar-nav { min-height: 44px; border: 0; border-radius: var(--r-m); background: transparent; color: var(--ink); font: inherit; font-size: 1.5rem; cursor: pointer; }
+.calendar-nav:hover { background: var(--surface-2); }
+.calendar-weekdays, .calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; }
+.calendar-weekdays { margin: 4px 0; color: var(--ink-2); font-size: 0.6875rem; font-weight: 700; text-align: center; }
+.calendar-weekdays span { padding: 6px 0; }
+.calendar-day { position: relative; min-width: 0; min-height: 40px; border: 0; border-radius: var(--r-s); background: transparent; color: var(--ink); font: inherit; font-size: 0.8125rem; cursor: pointer; }
+.calendar-day:hover { background: var(--surface-2); }
+.calendar-day.outside { color: #849198; }
+.calendar-day.in-range { border-radius: 0; background: #E5EBFF; color: var(--carbon-dark); }
+.calendar-day.selected { border-radius: var(--r-s); background: var(--carbon); color: #fff; font-weight: 700; }
+.calendar-day.today::after { content: ''; position: absolute; left: 50%; bottom: 4px; width: 4px; height: 4px; border-radius: 50%; background: var(--carbon); transform: translateX(-50%); }
+.calendar-day.selected.today::after { background: #fff; }
+.calendar-hint { min-height: 20px; margin-top: 8px; color: var(--ink-2); font-size: 0.75rem; }
+.calendar-foot { display: flex; justify-content: space-between; gap: 8px; margin-top: 8px; padding-top: 10px; border-top: 1px solid var(--line); }
+
+.input {
+  width: 100%; min-height: 44px; padding: 0 12px;
+  border: 1px solid var(--line-2); border-radius: var(--r-m); background: var(--surface);
+  font: inherit; color: var(--ink);
+}
+textarea.input { min-height: 64px; padding: 10px 12px; resize: vertical; }
+select.input { padding-right: 32px; }
+.input::placeholder { color: #7D8C92; }
+.input:hover { border-color: #8E9DA2; }
+.input:focus-visible { outline: none; border-color: var(--carbon); box-shadow: 0 0 0 3px var(--carbon-ring); }
+.input[aria-invalid="true"] { border-color: var(--kritis); }
+
+.table-wrap { overflow-x: auto; }
+.data { width: 100%; border-collapse: collapse; font-size: 0.9375rem; }
+.data th { padding: 10px 20px; background: var(--surface-2); border-bottom: 1px solid var(--line); text-align: left; font-size: 0.8125rem; font-weight: 700; color: var(--ink-2); white-space: nowrap; }
+.data td { padding: 14px 20px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.data tbody tr:last-child td { border-bottom: 0; }
+.data .r { text-align: right; white-space: nowrap; }
+.data tr.group th { padding: 8px 20px; background: var(--bg); color: var(--ink); font-size: 0.875rem; }
+.catatan { margin-top: 6px; font-size: 0.8125rem; color: var(--ink-2); overflow-wrap: anywhere; }
+.catatan strong, .feed-note strong { color: var(--ink); }
+.catatan-cell { min-width: 180px; max-width: 280px; overflow-wrap: anywhere; }
+.jenis { font-weight: 700; }
+.jenis.masuk { color: var(--normal); }
+
+/* ---------- catat transaksi ---------- */
+.tx-layout { display: grid; grid-template-columns: minmax(0, 640px) minmax(0, 1fr); gap: 24px; align-items: start; }
+.tx-form { display: flex; flex-direction: column; gap: 24px; padding: 24px; }
+
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field.full { grid-column: 1 / -1; }
+.field > label, .seg legend, .form-group legend, .radio-list legend { font-size: 0.9375rem; font-weight: 700; }
+.opt { font-weight: 400; color: var(--ink-2); }
+.hint { font-size: 0.8125rem; color: var(--ink-2); }
+.field-error { font-size: 0.8125rem; font-weight: 700; color: var(--kritis); }
+
+.seg { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.seg-3 { grid-template-columns: repeat(3, 1fr); }
+.seg-3 span { flex-direction: column; gap: 4px; min-height: 72px; font-size: 0.875rem; text-align: center; }
+.seg legend { margin-bottom: 8px; }
+.seg label { position: relative; display: block; }
+.seg input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
+.seg span {
+  display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 56px;
+  border: 2px solid var(--line-2); border-radius: var(--r-m); background: var(--surface);
+  font-weight: 700; color: var(--ink-2);
+}
+.seg svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.seg label:hover span { border-color: var(--ink-2); }
+.seg input:checked + span { border-color: var(--carbon); background: var(--carbon-tint); color: var(--carbon-dark); }
+.seg input:focus-visible + span { outline: 3px solid var(--carbon); outline-offset: 2px; }
+
+.results { list-style: none; margin: 6px 0 0; padding: 0; max-height: 330px; overflow-y: auto; border: 1px solid var(--line); border-radius: var(--r-m); }
+.results:empty { display: none; }
+.results button {
+  display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 10px 12px; border: 0; border-top: 1px solid var(--line); background: var(--surface);
+  font: inherit; text-align: left; color: var(--ink); cursor: pointer;
+}
+.results li:first-child button { border-top: 0; }
+.results button:hover { background: #F3F6FB; }
+.results button:focus-visible { outline-offset: -3px; }
+.no-result { padding: 12px; font-size: 0.9375rem; color: var(--ink-2); }
+
+.picked { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; border: 2px solid var(--ink); border-radius: var(--r-m); }
+.picked p { margin-top: 6px; }
+
+.stepper { display: flex; align-items: stretch; max-width: 340px; }
+.stepper button {
+  width: 52px; flex: none; border: 1px solid var(--line-2); background: var(--surface);
+  font: inherit; font-size: 1.5rem; color: var(--ink); cursor: pointer;
+}
+.stepper button:hover { background: var(--surface-2); }
+.stepper button:first-child { border-radius: var(--r-m) 0 0 var(--r-m); }
+.stepper button:last-child { border-radius: 0 var(--r-m) var(--r-m) 0; }
+.stepper .input { width: 96px; min-height: 52px; border-radius: 0; border-left: 0; border-right: 0; text-align: center; font-size: 1.25rem; font-weight: 700; }
+.stepper .unit { display: flex; align-items: center; padding: 0 12px; border-top: 1px solid var(--line-2); border-bottom: 1px solid var(--line-2); color: var(--ink-2); }
+
+.preview { padding: 16px; border: 1px solid transparent; border-radius: var(--r-m); background: var(--surface-2); }
+.preview.error { background: var(--kritis-tint); border-color: var(--kritis-line); color: #7A1A12; }
+.preview-title { margin-bottom: 4px; font-weight: 700; }
+.flow { margin: 2px 0 4px; font-size: 1.625rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.flow .unit { font-size: 1rem; font-weight: 400; color: var(--ink-2); }
+.flow .arrow { color: var(--ink-2); font-weight: 400; }
+
+.form-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; }
+
+/* ---------- dialog ---------- */
+dialog { padding: 0; border: 0; color: var(--ink); background: var(--surface); }
+dialog::backdrop { background: rgba(24, 38, 43, 0.45); }
+
+dialog.sheet { width: min(560px, 100%); max-width: 100%; height: 100%; max-height: 100%; margin: 0 0 0 auto; }
+.sheet-form { display: flex; flex-direction: column; height: 100%; }
+.sheet-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 20px 24px; border-bottom: 1px solid var(--line); }
+.sheet-head p { margin-top: 4px; }
+.sheet-body { flex: 1; overflow-y: auto; padding: 20px 24px; }
+.sheet-foot { display: flex; justify-content: flex-end; gap: 12px; padding: 16px 24px; border-top: 1px solid var(--line); }
+
+dialog.modal { width: min(480px, calc(100% - 32px)); border-radius: var(--r-l); }
+.modal-foot { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 12px; padding: 16px 24px; border-top: 1px solid var(--line); }
+.modal .sheet-body p + p { margin-top: 10px; }
+
+.preview-label { margin-bottom: 20px; padding: 14px 16px; border: 1px dashed var(--line-2); border-radius: var(--r-m); background: var(--surface-2); }
+.preview-label p { margin-bottom: 8px; }
+
+.form-group ~ .form-group { margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--line); }
+.form-group legend { margin-bottom: 12px; }
+.form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+
+.with-unit { position: relative; }
+.with-unit .input { padding-right: 76px; }
+.with-unit .unit { position: absolute; top: 50%; right: 12px; transform: translateY(-50%); font-size: 0.875rem; color: var(--ink-2); pointer-events: none; }
+
+.notice { margin-top: 20px; padding: 16px; border-radius: var(--r-m); }
+.notice.warn { background: var(--hampir-tint); border: 1px solid var(--hampir-line); }
+.notice h3 { margin-bottom: 10px; }
+.notice .id-line { margin-bottom: 6px; }
+.notice p { margin-bottom: 8px; }
+.notice-actions { margin: 4px 0 12px; }
+.check { display: flex; align-items: flex-start; gap: 10px; font-size: 0.9375rem; cursor: pointer; }
+.check input { width: 20px; height: 20px; margin: 1px 0 0; flex: none; accent-color: var(--carbon); }
+
+.radio-list { display: grid; gap: 10px; }
+.radio-list + .radio-list { margin-top: 20px; }
+.radio-list legend { margin-bottom: 8px; }
+.radio-list label { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+.radio-list input { width: 18px; height: 18px; margin: 0; accent-color: var(--carbon); }
+.demo-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+
+/* ---------- toast ---------- */
+.toast {
+  position: fixed; left: 50%; bottom: 24px; z-index: 50; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 16px; max-width: calc(100% - 32px);
+  padding: 12px 16px; border-radius: var(--r-m); background: var(--ink); color: #fff;
+  box-shadow: 0 8px 24px rgba(24, 38, 43, 0.25);
+}
+.toast a { color: #C9D5FF; font-weight: 700; white-space: nowrap; }
+.toast a:hover { color: #fff; }
+
+/* Gerak hanya sebagai jawaban atas aksi pengguna */
+@media (prefers-reduced-motion: no-preference) {
+  dialog.sheet[open] { animation: sheet-in 0.2s ease-out; }
+  .toast:not([hidden]) { animation: toast-in 0.2s ease-out; }
+}
+@keyframes sheet-in { from { transform: translateX(32px); opacity: 0; } }
+@keyframes toast-in { from { transform: translate(-50%, 8px); opacity: 0; } }
+
+/* ---------- responsif ---------- */
+.bottomnav { display: none; }
+
+@media (max-width: 1024px) {
+  .dash-grid, .tx-layout { grid-template-columns: minmax(0, 1fr); }
+  .topbar-inner { height: auto; min-height: 64px; flex-wrap: wrap; gap: 0 16px; padding-top: 8px; }
+  .mainnav { order: 5; justify-content: center; width: 100%; height: 44px; }
+}
+
+@media (min-width: 721px) and (max-width: 1024px) {
+  .history-panel .data { min-width: 960px; }
+}
+
+@media (max-width: 720px) {
+  .mainnav, .top-actions .btn-primary, .brand-sub, .sync-text { display: none; }
+  /* nowrap: aturan tablet (max-width 1024px) mengizinkan wrap, tapi di HP tinggi header dikunci 56px,
+     jadi isi yang turun baris akan keluar dari header. */
+  .topbar-inner { height: 56px; padding: 0 12px; gap: 8px; flex-wrap: nowrap; }
+  /* Pemilih gudang tetap terlihat di HP: tanpa ini staf tidak tahu sedang melihat gudang mana. */
+  .gudang-pilih { flex: 1 1 auto; min-width: 0; }
+  .gudang-pilih select { max-width: 100%; font-size: 0.875rem; padding: 0 26px 0 10px; }
+  .seg-3 { grid-template-columns: 1fr; }
+  .seg-3 span { flex-direction: row; min-height: 56px; }
+  .sync { min-height: 40px; padding: 0 12px; }
+  .sync .sync-short { display: inline; }
+  main { padding: 20px 16px 112px; }
+  h1 { font-size: 1.5rem; }
+  .page-head { margin-bottom: 16px; }
+  .page-head .btn { width: 100%; }
+
+  .bottomnav {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    padding-bottom: env(safe-area-inset-bottom);
+    background: var(--surface); border-top: 1px solid var(--line);
+  }
+  .bottomnav a {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+    min-height: 60px; padding: 6px 4px; font-size: 0.75rem; font-weight: 700; color: var(--ink-2); text-decoration: none;
+  }
+  .bottomnav a[aria-current="page"] { color: var(--carbon); }
+  .bottomnav svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+  .restock li { grid-template-columns: minmax(0, 1fr); gap: 8px; padding: 16px; }
+  .restock .btn { justify-self: start; }
+  .panel-head, .toolbar { padding: 14px 16px; }
+  .toolbar .toolbar-select { flex: 1 1 100%; }
+  .history-primary { grid-template-columns: minmax(0, 1fr); }
+  .date-toolbar { flex-direction: column; align-items: stretch; }
+  .calendar-shell { flex-basis: auto; width: 100%; }
+  .toolbar-clear { width: 100%; }
+  .feed li { padding: 10px 16px; }
+
+  .data thead { display: none; }
+  .data, .data tbody, .data tr { display: block; width: 100%; }
+  .data tbody tr { padding: 12px 16px; border-bottom: 1px solid var(--line); }
+  .data tbody tr:last-child { border-bottom: 0; }
+  .data td { display: flex; justify-content: space-between; gap: 12px; padding: 4px 0; border: 0; text-align: right; }
+  .data td::before { content: attr(data-label); font-size: 0.8125rem; color: var(--ink-2); text-align: left; }
+  .data td.stack { display: block; text-align: left; }
+  .data td.stack::before { display: block; margin-bottom: 4px; }
+  .data td.act { justify-content: flex-end; padding-top: 8px; }
+  .data td.act::before { content: none; }
+  .data td.catatan-cell { max-width: none; text-align: right; }
+  .data tr.group { padding: 0; }
+  .data tr.group th { display: block; }
+
+  .tx-form { padding: 16px; }
+  .form-foot .btn { width: 100%; }
+  .sheet-head, .sheet-body, .sheet-foot { padding-left: 16px; padding-right: 16px; }
+  .sheet-foot .btn { flex: 1; }
+  .toast { bottom: 84px; }
+}
+
+@media (max-width: 420px) {
+  .form-grid { grid-template-columns: minmax(0, 1fr); }
+  .calendar-popover { left: 50%; width: calc(100vw - 24px); padding: 10px; transform: translateX(-50%); }
+}
+
+.sync-short { display: none; }
+
+/* Header padat karena ada pemilih gudang: teks status Sheets dipendekkan lebih awal. */
+@media (max-width: 1100px) {
+  .sync .sync-text { display: none; }
+  .sync .sync-short { display: inline; }
+}
+
+/* Kotak cari di Dashboard: menempel di panel stok, keterangan jumlah hasil tepat di bawahnya */
+.hasil-cari { margin-top: 6px; }
+
+/* Ikon kaca pembesar di semua kotak cari: penanda yang langsung dikenali staf, seragam di tiap halaman. */
+input[type="search"].input {
+  padding-left: 40px;
+  background: var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2351626A' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.5-3.5'/%3E%3C/svg%3E") no-repeat 12px center / 18px 18px;
+}
+
+/* ================= Rapikan layar kecil dan tablet — 17 Okt 2026 =================
+   Layar >= 1025px tidak tersentuh. Tujuan: satu kartu = satu hal, label seperlunya, tidak ada yang terpotong. */
+
+/* HP (<= 720px): label spesifikasi, pilihan jenis transaksi */
+@media (max-width: 720px) {
+  /* Label spesifikasi: kisi 4 kolom sama lebar, merek (sel ke-7) mengambil 2 kolom,
+     sehingga tidak ada sel yang melebar sendirian di baris kedua. */
+  .spec { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); width: 100%; }
+  .spec > span { padding: 6px 4px; overflow: hidden; text-overflow: ellipsis; }
+  .spec > span:last-child { grid-column: span 2; }
+
+  /* Jenis transaksi: tiga pilihan berjajar, ikon di atas teks. */
+  .seg-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .seg-3 span { flex-direction: column; gap: 4px; min-height: 68px; padding: 6px 4px; font-size: 0.8125rem; line-height: 1.2; }
+}
+
+/* HP sangat kecil (<= 420px): kolom jumlah ikut menyusut supaya tombol + tidak keluar layar */
+@media (max-width: 420px) {
+  .stepper { max-width: none; }
+  .stepper .input { flex: 1 1 auto; width: auto; min-width: 0; }
+}
+
+/* HP dan tablet (<= 1024px): tabel Produk dan Riwayat jadi kartu.
+   Di tablet tabel 6 kolom terlalu sempit: label spesifikasi menumpuk ke bawah dan tombol terpotong. */
+@media (max-width: 1024px) {
+  #produkIsi .data thead, #rIsi .data thead { display: none; }
+  /* min-width 0: menimpa .history-panel .data { min-width: 960px } yang dibuat untuk tabel layar besar */
+  #produkIsi .data, #produkIsi .data tbody, #rIsi .data, #rIsi .data tbody { display: block; width: 100%; min-width: 0; }
+  #rIsi .catatan-cell { min-width: 0; max-width: none; }
+  #produkIsi .data tbody tr, #rIsi .data tbody tr:not(.group) { border-bottom: 1px solid var(--line); }
+  #produkIsi .data tbody tr:last-child, #rIsi .data tbody tr:last-child { border-bottom: 0; }
+  #rIsi .data tr.group { display: block; padding: 0; }
+  #rIsi .data tr.group th { display: block; }
+
+  /* Kartu produk:  kode | status  /  spesifikasi  /  stok + rincian gudang  /  minimum | tombol */
+  #produkIsi .data tbody tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px 12px; align-items: center; padding: 16px; }
+  #produkIsi .data td { display: block; padding: 0; border: 0; text-align: left; }
+  #produkIsi .data td::before { content: none; }
+  #produkIsi .data td:nth-child(1) { grid-column: 1; grid-row: 1; }
+  #produkIsi .data td:nth-child(5) { grid-column: 2; grid-row: 1; }
+  #produkIsi .data td:nth-child(2) { grid-column: 1 / -1; grid-row: 2; }
+  #produkIsi .data td:nth-child(3) { grid-column: 1 / -1; grid-row: 3; white-space: normal; }
+  #produkIsi .data td:nth-child(3)::before { content: attr(data-label); display: block; margin-bottom: 2px; font-size: 0.75rem; color: var(--ink-2); }
+  #produkIsi .data td:nth-child(4) { grid-column: 1; grid-row: 4; font-size: 0.875rem; }
+  #produkIsi .data td:nth-child(4)::before { content: "Minimum "; display: inline; color: var(--ink-2); }
+  #produkIsi .data td:nth-child(6) { grid-column: 2; grid-row: 4; }
+  #produkIsi .rincian { white-space: normal; }
+
+  /* Kartu riwayat:  jam · jenis ....... jumlah  /  gudang  /  produk  /  catatan
+     Jenis diberi kolom lentur: teks pindah gudang ("Larangan → Tekno") boleh turun baris tanpa menimpa jumlah. */
+  #rIsi .data tbody tr:not(.group) { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 6px 10px; align-items: center; padding: 14px 16px; }
+  #rIsi .data tbody tr:not(.group) td { display: block; padding: 0; border: 0; text-align: left; }
+  #rIsi .data tbody tr:not(.group) td::before { content: none; }
+  #rIsi .data td:nth-child(1) { grid-column: 1; grid-row: 1; color: var(--ink-2); }
+  #rIsi .data td:nth-child(2) { grid-column: 2; grid-row: 1; }
+  #rIsi .data td:nth-child(6) { grid-column: 3; grid-row: 1; text-align: right; white-space: nowrap; }
+  #rIsi .data td:nth-child(3) { grid-column: 1 / -1; grid-row: 2; }
+  #rIsi .data td:nth-child(4) { grid-column: 1 / -1; grid-row: 3; margin-top: 2px; }
+  #rIsi .data td:nth-child(5) { grid-column: 1 / -1; grid-row: 4; font-size: 0.875rem; color: var(--ink-2); }
+  /* Catatan kosong ("-") hanya perlu di tabel layar besar; di kartu disembunyikan. */
+  #rIsi .data td:nth-child(5):has(> .muted:only-child) { display: none; }
+}
+
+/* Tampilkan bertahap & peringatan simpan — 17 Okt 2026 */
+.tampil-lagi { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 16px 20px 20px; border-top: 1px solid var(--line); text-align: center; }
+.peringatan-simpan {
+  max-width: 1200px; margin: 16px auto 0; padding: 12px 16px;
+  background: var(--kritis-tint); border: 1px solid var(--kritis-line); border-radius: var(--r-m);
+  color: #7A1A12; font-weight: 700; font-size: 0.9375rem;
+}
+@media (max-width: 1240px) { .peringatan-simpan { margin-left: 16px; margin-right: 16px; } }
+
+/* ================= UI HP (<= 720px) — 17 Okt 2026 =================
+   Dasar ukuran: target sentuh minimal 44px, huruf minimal 13px, konten mulai sedekat mungkin ke atas layar. */
+@media (max-width: 720px) {
+  /* Pita prototipe: satu baris tipis. Kalimat lengkapnya tetap ada di layar besar. */
+  .demo-strip { flex-wrap: nowrap; justify-content: space-between; gap: 8px; padding: 0 4px 0 12px; font-size: 0.8125rem; text-align: left; }
+  .demo-detail { display: none; }
+  .demo-strip .link-btn { min-height: 44px; padding: 0 10px; white-space: nowrap; }
+
+  /* Target sentuh >= 44px */
+  .brand { min-height: 44px; }
+  .gudang-pilih select, .sync { min-height: 44px; }
+  .btn-sm { min-height: 44px; }
+  .panel-foot a { display: inline-flex; align-items: center; min-height: 44px; }
+
+  /* Tombol saring status: satu baris, bisa digeser, tidak turun ke baris kedua */
+  .panel-head .chips {
+    flex-wrap: nowrap; overflow-x: auto; width: calc(100% + 32px); margin: 0 -16px; padding: 0 16px 2px;
+    scrollbar-width: none; -webkit-overflow-scrolling: touch;
+  }
+  .panel-head .chips::-webkit-scrollbar { display: none; }
+  .chip { flex: none; min-height: 44px; padding: 0 16px; font-size: 0.9375rem; }
+
+  /* Huruf minimal 13px */
+  .tag-gudang { font-size: 0.8125rem; padding: 3px 8px; }
+  .spec small { font-size: 0.8125rem; }
+  .badge { font-size: 0.875rem; }
+  .bottomnav a { font-size: 0.8125rem; }
+  .date-toolbar-label { font-size: 0.8125rem; }
+
+  /* Kartu stok Dashboard: tombol aksi di samping keterangan stok, bukan satu baris sendiri */
+  .restock li { grid-template-columns: minmax(0, 1fr) auto; gap: 8px 12px; padding: 14px 16px; align-items: center; }
+  .restock li > div { display: contents; }
+  .restock .kepala { grid-column: 1 / -1; margin-bottom: 0; }
+  .restock .spec { grid-column: 1 / -1; }
+  .restock .meter { grid-column: 1 / -1; max-width: none; margin: 4px 0 0; }
+  .restock .meter-text { grid-column: 1; }
+  .restock li > .btn { grid-column: 2; justify-self: end; min-height: 44px; padding: 0 14px; font-size: 0.875rem; white-space: normal; text-align: center; max-width: 9.5rem; line-height: 1.2; }
+}
+
+/* Perangkat layar sentuh (HP, tablet, laptop sentuh), apa pun lebarnya: target sentuh minimal 44px.
+   Komputer dengan mouse tidak terpengaruh, jadi tampilan layar besar yang sudah disetujui tetap sama. */
+@media (pointer: coarse) {
+  .chip, .btn-sm, .gudang-pilih select, .sync, .brand { min-height: 44px; }
+  .chip { padding: 0 16px; }
+  .panel-foot a, .demo-strip .link-btn { display: inline-flex; align-items: center; min-height: 44px; }
+  .mainnav a { min-height: 44px; }
+}

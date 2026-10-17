@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>alo monitoring (prototipe)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:wght@400;700;800&display=swap">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <a class="skip" href="#view">Lompat ke isi halaman</a>
+
+  <div class="demo-strip" role="note">
+    <span><strong>Prototipe tampilan.</strong> <span class="demo-detail">Semua produk dan angka di sini data contoh, bukan stok asli.</span></span>
+    <button type="button" class="link-btn" id="btnDemo">Atur kondisi demo</button>
+  </div>
+
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="#/dashboard" aria-label="alo monitoring stok, ke dashboard">
+        <svg class="brand-icon" viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.66 3.58 3 8 3s8-1.34 8-3V6"/><ellipse cx="12" cy="6" rx="2.5" ry="1"/></svg>
+        <span class="brand-mark">alo</span>
+        <span class="brand-sub">monitoring stok</span>
+      </a>
+      <div class="gudang-pilih">
+        <label class="sr-only" for="pilihGudang">Gudang yang ditampilkan</label>
+        <select class="input" id="pilihGudang"></select>
+      </div>
+      <nav class="mainnav" aria-label="Menu utama">
+        <a href="#/dashboard" data-nav="dashboard">Dashboard</a>
+        <a href="#/produk" data-nav="produk">Produk</a>
+        <a href="#/riwayat" data-nav="riwayat">Riwayat</a>
+      </nav>
+      <div class="top-actions">
+        <button type="button" class="sync" id="syncBtn"></button>
+        <a class="btn btn-primary" href="#/transaksi" data-nav="transaksi">Catat transaksi</a>
+      </div>
+    </div>
+  </header>
+
+  <main id="view" tabindex="-1"></main>
+
+  <nav class="bottomnav" aria-label="Menu utama">
+    <a href="#/dashboard" data-nav="dashboard">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 13h8V3H3zM13 21h8V11h-8zM13 3v5h8V3zM3 21h8v-5H3z"/></svg>Dashboard</a>
+    <a href="#/produk" data-nav="produk">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.66 3.58 3 8 3s8-1.34 8-3V6"/></svg>Produk</a>
+    <a href="#/transaksi" data-nav="transaksi">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>Catat</a>
+    <a href="#/riwayat" data-nav="riwayat">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Riwayat</a>
+  </nav>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+  <!-- Form tambah produk (KF-01, KF-02, KF-03) -->
+  <dialog id="dlgProduk" class="sheet" aria-labelledby="produkJudul">
+    <form id="formProduk" class="sheet-form" novalidate>
+      <div class="sheet-head">
+        <div>
+          <h2 id="produkJudul">Tambah produk</h2>
+          <p class="muted small">Isi sesuai barang fisiknya, bukan sesuai sebutan customer. Kode dibuat otomatis.</p>
+        </div>
+        <button type="button" class="icon-btn" data-close aria-label="Tutup">&times;</button>
+      </div>
+
+      <div class="sheet-body">
+        <div class="preview-label">
+          <p class="small muted">Produk akan tercatat sebagai <strong class="num" id="pratinjauKode">kode menunggu tipe</strong></p>
+          <div id="pratinjauSpec"></div>
+        </div>
+
+        <fieldset class="form-group">
+          <legend>Spesifikasi</legend>
+          <div class="form-grid">
+            <div class="field">
+              <label for="fTipe">Tipe</label>
+              <input class="input" id="fTipe" name="tipe" list="dlTipe" autocomplete="off" aria-describedby="err-tipe">
+              <datalist id="dlTipe"></datalist>
+              <p class="field-error" id="err-tipe" hidden></p>
+            </div>
+            <div class="field">
+              <label for="fLebar">Lebar</label>
+              <div class="with-unit"><input class="input num" id="fLebar" name="lebar" inputmode="decimal" autocomplete="off" aria-describedby="err-lebar"><span class="unit" aria-hidden="true">mm</span></div>
+              <p class="field-error" id="err-lebar" hidden></p>
+            </div>
+            <div class="field">
+              <label for="fTebal">Tebal</label>
+              <div class="with-unit"><input class="input num" id="fTebal" name="tebal" inputmode="decimal" autocomplete="off" aria-describedby="err-tebal"><span class="unit" aria-hidden="true">mm</span></div>
+              <p class="field-error" id="err-tebal" hidden></p>
+            </div>
+            <div class="field">
+              <label for="fPanjang">Panjang</label>
+              <div class="with-unit"><input class="input num" id="fPanjang" name="panjang" inputmode="decimal" autocomplete="off" aria-describedby="err-panjang"><span class="unit" aria-hidden="true">m</span></div>
+              <p class="field-error" id="err-panjang" hidden></p>
+            </div>
+            <div class="field">
+              <label for="fBerat">Berat</label>
+              <div class="with-unit"><input class="input num" id="fBerat" name="berat" inputmode="decimal" autocomplete="off" aria-describedby="err-berat"><span class="unit" aria-hidden="true">kg</span></div>
+              <p class="field-error" id="err-berat" hidden></p>
+            </div>
+            <div class="field">
+              <label for="fWarna">Warna</label>
+              <input class="input" id="fWarna" name="warna" list="dlWarna" autocomplete="off" aria-describedby="err-warna">
+              <datalist id="dlWarna"></datalist>
+              <p class="field-error" id="err-warna" hidden></p>
+            </div>
+            <div class="field">
+              <label for="fMerek">Merek</label>
+              <input class="input" id="fMerek" name="merek" list="dlMerek" autocomplete="off" aria-describedby="err-merek">
+              <datalist id="dlMerek"></datalist>
+              <p class="field-error" id="err-merek" hidden></p>
+            </div>
+          </div>
+        </fieldset>
+
+        <!-- Tepat di bawah spesifikasi: peringatan harus terlihat begitu atribut terakhir diketik (KF-03) -->
+        <div class="notice warn" id="dupBox" role="alert" hidden>
+          <h3>Produk dengan spesifikasi ini sudah ada</h3>
+          <div id="dupIsi"></div>
+          <p class="small">Barang yang sama sebaiknya dicatat di produk yang sudah ada, supaya stoknya tidak terpecah jadi dua.</p>
+          <div class="notice-actions">
+            <a class="btn btn-secondary btn-sm" id="dupPakai" href="#/transaksi">Catat barang masuk ke produk ini</a>
+          </div>
+          <label class="check"><input type="checkbox" id="dupOverride"><span>Ini barang yang berbeda, tetap simpan sebagai produk baru</span></label>
+          <p class="field-error" id="dupPesan" hidden>Centang dulu kalau ini memang barang yang berbeda.</p>
+        </div>
+
+        <!-- Catatan sengaja di luar spesifikasi: tidak ikut dicocokkan saat cek duplikat -->
+        <div class="form-group">
+          <div class="field">
+            <label for="fCatatan">Catatan <span class="opt">(boleh kosong)</span></label>
+            <textarea class="input" id="fCatatan" name="catatan" rows="2"></textarea>
+            <p class="hint">Tidak ikut dipakai untuk mengecek produk kembar.</p>
+          </div>
+        </div>
+
+        <fieldset class="form-group">
+          <legend>Gudang dan batas stok</legend>
+          <div class="form-grid">
+            <div class="field">
+              <label for="fGudang">Disimpan di gudang</label>
+              <select class="input" id="fGudang" name="gudang" aria-describedby="hint-gudang"></select>
+              <p class="hint" id="hint-gudang">Produk tetap bisa dipakai di gudang lain setelah barangnya dicatat masuk ke sana.</p>
+            </div>
+            <div class="field">
+              <label for="fMin">Stok minimum</label>
+              <div class="with-unit"><input class="input num" id="fMin" name="min" inputmode="numeric" autocomplete="off" aria-describedby="hint-min err-min"><span class="unit" aria-hidden="true">gulungan</span></div>
+              <p class="hint" id="hint-min">Status jadi Kritis kalau stok sama dengan atau di bawah angka ini.</p>
+              <p class="field-error" id="err-min" hidden></p>
+            </div>
+          </div>
+        </fieldset>
+      </div>
+
+      <div class="sheet-foot">
+        <button type="button" class="btn btn-secondary" data-close>Batal</button>
+        <button type="submit" class="btn btn-primary">Simpan produk</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Status salinan Google Sheets (KF-07, KNF-03) -->
+  <dialog id="dlgSync" class="modal" aria-labelledby="syncJudul">
+    <div id="syncIsi"></div>
+  </dialog>
+
+  <!-- Panel khusus prototipe -->
+  <dialog id="dlgDemo" class="modal" aria-labelledby="demoJudul">
+    <div class="sheet-head">
+      <div>
+        <h2 id="demoJudul">Atur kondisi demo</h2>
+        <p class="muted small">Panel ini hanya ada di prototipe, untuk mencoba kondisi yang jarang terjadi.</p>
+      </div>
+      <button type="button" class="icon-btn" data-close aria-label="Tutup">&times;</button>
+    </div>
+    <div class="sheet-body">
+      <fieldset class="radio-list">
+        <legend>Salinan ke Google Sheets</legend>
+        <label><input type="radio" name="demoSheets" value="ok"><span>Tersalin normal</span></label>
+        <label><input type="radio" name="demoSheets" value="gagal"><span>Gagal kirim, misalnya internet kantor putus</span></label>
+      </fieldset>
+      <fieldset class="radio-list">
+        <legend>Data</legend>
+        <div class="demo-actions">
+          <button type="button" class="btn btn-secondary" id="demoKosong">Kosongkan semua data</button>
+          <button type="button" class="btn btn-secondary" id="demoReset">Kembalikan data contoh</button>
+        </div>
+      </fieldset>
+    </div>
+  </dialog>
+
+  <script src="logic.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
