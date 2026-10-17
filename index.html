@@ -7,7 +7,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:wght@400;700;800&display=swap">
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=20261017-arsip">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="archive.css?v=20261017-arsip">
+  <meta name="alo-version" content="20261017-arsip-1">
 </head>
 <body>
   <a class="skip" href="#view">Lompat ke isi halaman</a>
@@ -32,9 +35,9 @@
         <a href="#/dashboard" data-nav="dashboard">Dashboard</a>
         <a href="#/produk" data-nav="produk">Produk</a>
         <a href="#/riwayat" data-nav="riwayat">Riwayat</a>
+        <a href="#/laporan" data-nav="laporan">Laporan</a>
       </nav>
       <div class="top-actions">
-        <button type="button" class="sync" id="syncBtn"></button>
         <a class="btn btn-primary" href="#/transaksi" data-nav="transaksi">Catat transaksi</a>
       </div>
     </div>
@@ -51,6 +54,8 @@
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>Catat</a>
     <a href="#/riwayat" data-nav="riwayat">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Riwayat</a>
+    <a href="#/laporan" data-nav="laporan">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l4 4v14H6zM15 3v5h4M9 12h7M9 16h7"/></svg>Laporan</a>
   </nav>
 
   <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
@@ -155,6 +160,7 @@
         </fieldset>
       </div>
 
+      <p class="field-error" id="produkSimpanError" role="alert" hidden></p>
       <div class="sheet-foot">
         <button type="button" class="btn btn-secondary" data-close>Batal</button>
         <button type="submit" class="btn btn-primary">Simpan produk</button>
@@ -162,9 +168,14 @@
     </form>
   </dialog>
 
-  <!-- Status salinan Google Sheets (KF-07, KNF-03) -->
-  <dialog id="dlgSync" class="modal" aria-labelledby="syncJudul">
-    <div id="syncIsi"></div>
+  <dialog id="dlgDetail" class="sheet report-detail" aria-labelledby="detailJudul">
+    <div class="sheet-form" id="detailIsi"></div>
+  </dialog>
+  <dialog id="dlgProdukAksi" class="sheet report-detail" aria-labelledby="produkAksiJudul">
+    <div class="sheet-form" id="produkAksiIsi"></div>
+  </dialog>
+  <dialog id="dlgLaporanForm" class="sheet report-create" aria-labelledby="laporanFormJudul">
+    <div id="laporanFormIsi"></div>
   </dialog>
 
   <!-- Panel khusus prototipe -->
@@ -178,11 +189,6 @@
     </div>
     <div class="sheet-body">
       <fieldset class="radio-list">
-        <legend>Salinan ke Google Sheets</legend>
-        <label><input type="radio" name="demoSheets" value="ok"><span>Tersalin normal</span></label>
-        <label><input type="radio" name="demoSheets" value="gagal"><span>Gagal kirim, misalnya internet kantor putus</span></label>
-      </fieldset>
-      <fieldset class="radio-list">
         <legend>Data</legend>
         <div class="demo-actions">
           <button type="button" class="btn btn-secondary" id="demoKosong">Kosongkan semua data</button>
@@ -192,7 +198,7 @@
     </div>
   </dialog>
 
-  <script src="logic.js"></script>
-  <script src="app.js"></script>
+  <script src="logic.js?v=20261017-arsip"></script>
+  <script src="app.js?v=20261017-arsip"></script>
 </body>
 </html>

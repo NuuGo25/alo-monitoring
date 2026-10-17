@@ -123,16 +123,6 @@ h1:focus, main:focus { outline: none; }
 .rincian { margin-top: 4px; font-size: 0.8125rem; font-weight: 400; color: var(--ink-2); }
 .jenis.pindah { color: var(--ink-2); }
 
-.sync {
-  display: inline-flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 12px;
-  border: 1px solid var(--line); border-radius: 999px; background: var(--surface);
-  font: inherit; font-size: 0.8125rem; color: var(--ink-2); cursor: pointer;
-}
-.sync:hover { border-color: var(--line-2); color: var(--ink); }
-.sync .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--normal-bar); flex: none; }
-.sync.gagal { background: var(--kritis-tint); border-color: var(--kritis-line); color: var(--kritis); font-weight: 700; }
-.sync.gagal .dot { background: var(--kritis-bar); }
-
 /* ---------- tombol ---------- */
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
@@ -436,7 +426,7 @@ dialog.modal { width: min(480px, calc(100% - 32px)); border-radius: var(--r-l); 
 }
 
 @media (max-width: 720px) {
-  .mainnav, .top-actions .btn-primary, .brand-sub, .sync-text { display: none; }
+  .mainnav, .top-actions .btn-primary, .brand-sub { display: none; }
   /* nowrap: aturan tablet (max-width 1024px) mengizinkan wrap, tapi di HP tinggi header dikunci 56px,
      jadi isi yang turun baris akan keluar dari header. */
   .topbar-inner { height: 56px; padding: 0 12px; gap: 8px; flex-wrap: nowrap; }
@@ -445,8 +435,6 @@ dialog.modal { width: min(480px, calc(100% - 32px)); border-radius: var(--r-l); 
   .gudang-pilih select { max-width: 100%; font-size: 0.875rem; padding: 0 26px 0 10px; }
   .seg-3 { grid-template-columns: 1fr; }
   .seg-3 span { flex-direction: row; min-height: 56px; }
-  .sync { min-height: 40px; padding: 0 12px; }
-  .sync .sync-short { display: inline; }
   main { padding: 20px 16px 112px; }
   h1 { font-size: 1.5rem; }
   .page-head { margin-bottom: 16px; }
@@ -501,14 +489,6 @@ dialog.modal { width: min(480px, calc(100% - 32px)); border-radius: var(--r-l); 
   .calendar-popover { left: 50%; width: calc(100vw - 24px); padding: 10px; transform: translateX(-50%); }
 }
 
-.sync-short { display: none; }
-
-/* Header padat karena ada pemilih gudang: teks status Sheets dipendekkan lebih awal. */
-@media (max-width: 1100px) {
-  .sync .sync-text { display: none; }
-  .sync .sync-short { display: inline; }
-}
-
 /* Kotak cari di Dashboard: menempel di panel stok, keterangan jumlah hasil tepat di bawahnya */
 .hasil-cari { margin-top: 6px; }
 
@@ -516,6 +496,83 @@ dialog.modal { width: min(480px, calc(100% - 32px)); border-radius: var(--r-l); 
 input[type="search"].input {
   padding-left: 40px;
   background: var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2351626A' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.5-3.5'/%3E%3C/svg%3E") no-repeat 12px center / 18px 18px;
+}
+
+/* Laporan memakai panel, tabel, dan sheet prototipe yang sama. */
+.report-section { margin-top: 24px; }
+.report-head-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+#detailDaftarJudul { scroll-margin-top: 110px; }
+.report-filters .toolbar { align-items: flex-end; }
+.report-filters .field { flex: 0 1 200px; }
+.report-filters .search { flex: 1 1 280px; }
+.report-context { padding: 12px 20px; overflow-wrap: anywhere; }
+.report-limit { margin-top: 20px; }
+.report-table { min-width: 1050px; }
+.report-table td { max-width: 250px; }
+.report-table td:first-child { min-width: 230px; }
+.report-transactions td { overflow-wrap: anywhere; }
+.report-transactions td:nth-child(2) { max-width: 240px; }
+.tx-status { display: inline-block; justify-self: start; padding: 3px 9px; border-radius: var(--r-s); background: var(--normal-tint); color: var(--normal); font-size: 0.8125rem; font-weight: 700; }
+.tx-status.cancelled { background: var(--surface-2); color: var(--ink-2); border: 1px solid var(--line); }
+.btn-danger { background: var(--kritis-tint); border-color: var(--kritis-line); color: var(--kritis); }
+.btn-danger:hover { border-color: var(--kritis); }
+.report-detail .btn:disabled, .report-create .btn:disabled { cursor: not-allowed; opacity: 0.65; }
+.report-filters .input::placeholder { color: var(--ink-2); }
+.detail-spec { margin-top: 12px; }
+.detail-fields { margin: 20px 0; }
+.detail-fields > div { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.detail-fields dt, .audit-values dt { font-size: 0.875rem; color: var(--ink-2); }
+.detail-fields dd, .audit-values dd { margin: 0; overflow-wrap: anywhere; }
+.audit-section { margin-top: 24px; }
+.audit-section > h3 { margin-bottom: 14px; }
+.audit-list { list-style: none; padding: 0; margin: 0; }
+.audit-list > li { padding: 16px 0; border-top: 1px solid var(--line); overflow-wrap: anywhere; }
+.audit-list > li > p { margin-top: 6px; }
+.audit-values { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 12px 0 0; }
+.audit-values > div { padding: 12px; border-radius: var(--r-s); background: var(--surface-2); }
+.detail-editor { display: grid; gap: 16px; padding: 20px 0; border-bottom: 1px solid var(--line); }
+.detail-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.report-create .tx-layout { display: block; }
+.report-create .tx-layout > section { display: none; }
+.report-create .page-head { padding: 20px 24px; margin: 0; align-items: flex-start; flex-wrap: nowrap; }
+.report-create .page-head p { font-size: 0.8125rem; }
+.report-create .tx-form { border: 0; border-radius: 0; }
+.report-create { overflow-y: auto; }
+body:has(#dlgDetail[open], #dlgLaporanForm[open]) { overflow: hidden; }
+
+@media (min-width: 1025px) and (max-width: 1200px) {
+  .topbar-inner { gap: 16px; }
+  .brand-sub { display: none; }
+}
+@media (max-width: 720px) {
+  .bottomnav { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .report-filters .field, .report-filters .search { flex: 1 1 100%; }
+  .report-filters .btn { width: 100%; }
+  .report-head-actions { width: 100%; }
+  .report-head-actions .btn { flex: 1 1 100%; }
+  .report-context { padding: 12px 16px; }
+  .rekap-table, .rekap-table tbody { display: block; min-width: 0; }
+  .rekap-table thead { display: none; }
+  .rekap-table tbody tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 16px; padding: 16px; border-bottom: 1px solid var(--line-2); }
+  .rekap-table td { display: block; max-width: none; min-width: 0; text-align: left; padding: 10px 0; }
+  .rekap-table td:first-child { grid-column: 1 / -1; padding: 0; }
+  .rekap-table td:nth-child(2) { grid-column: 1 / -1; padding: 6px 0 12px; }
+  .rekap-table td.r { text-align: left; border-top: 1px solid var(--line); font-size: 1.125rem; font-weight: 700; }
+  .rekap-table td.r::before { display: block; margin-bottom: 3px; content: attr(data-label); font-size: 0.8125rem; font-weight: 400; }
+  .rekap-table td:nth-child(-n+2)::before { content: none; }
+  .rekap-table td:last-child { color: var(--carbon-dark); }
+  .report-transactions td { text-align: left; }
+  .report-transactions td:nth-child(2) { max-width: none; }
+  .report-transactions td:not(.act) { display: grid; grid-template-columns: 80px minmax(0, 1fr); text-align: left; }
+  .report-transactions td:not(.act) > p { grid-column: 2; }
+  .report-transactions td.r { white-space: normal; }
+  .report-transactions td.r > span { grid-column: 2; }
+  .report-transactions td.act > .btn { width: 100%; }
+  .report-detail .sheet-foot { flex-wrap: wrap; }
+  .report-detail .sheet-foot .btn { flex: 1 1 100%; }
+  .detail-actions > .btn { width: 100%; white-space: normal; }
+  .detail-fields > div { grid-template-columns: 80px minmax(0, 1fr); }
+  .audit-values { grid-template-columns: minmax(0, 1fr); }
 }
 
 /* ================= Rapikan layar kecil dan tablet — 17 Okt 2026 =================
@@ -600,7 +657,7 @@ input[type="search"].input {
 
   /* Target sentuh >= 44px */
   .brand { min-height: 44px; }
-  .gudang-pilih select, .sync { min-height: 44px; }
+  .gudang-pilih select { min-height: 44px; }
   .btn-sm { min-height: 44px; }
   .panel-foot a { display: inline-flex; align-items: center; min-height: 44px; }
 
@@ -632,7 +689,7 @@ input[type="search"].input {
 /* Perangkat layar sentuh (HP, tablet, laptop sentuh), apa pun lebarnya: target sentuh minimal 44px.
    Komputer dengan mouse tidak terpengaruh, jadi tampilan layar besar yang sudah disetujui tetap sama. */
 @media (pointer: coarse) {
-  .chip, .btn-sm, .gudang-pilih select, .sync, .brand { min-height: 44px; }
+  .chip, .btn-sm, .gudang-pilih select, .brand { min-height: 44px; }
   .chip { padding: 0 16px; }
   .panel-foot a, .demo-strip .link-btn { display: inline-flex; align-items: center; min-height: 44px; }
   .mainnav a { min-height: 44px; }

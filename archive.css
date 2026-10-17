@@ -1,0 +1,11 @@
+.product-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.product-actions .btn { min-height: 44px; }
+.archive-info { padding: 16px; border: 1px solid var(--line); background: var(--surface-2); border-radius: var(--r-m); margin: 20px 0; }
+.archive-info p + p { margin-top: 8px; }
+.archive-history { list-style: none; padding: 0; margin: 16px 0; }
+.archive-history li { padding: 14px 0; border-top: 1px solid var(--line); }
+.archive-history p { margin-top: 5px; overflow-wrap: anywhere; }
+#produkAksiStatus { margin-top: 14px; }
+#dlgProdukAksi .sheet-foot { flex-wrap: wrap; }
+#dlgProdukAksi .sheet-foot .btn { flex: 1 1 140px; }
+@media (max-width: 640px) { .product-actions { justify-content: flex-start; } }

@@ -1,5 +1,5 @@
 /* alo monitoring — prototipe tampilan (versi 3 gudang).
-   Tanpa server: data contoh disimpan di localStorage browser. Aturan bisnis di sini
+   Data contoh disimpan di localStorage browser; Excel dibuat saat diminta. Aturan bisnis di sini
    (cek duplikat KF-03, tolak stok minus KF-08, status per gudang KF-05, pindah gudang KF-11)
    jadi acuan implementasi tahap 2-3. */
 (() => {
@@ -10,7 +10,9 @@
   const SATUAN = 'gulungan';                 // ASUMSI A1/A10: belum dikonfirmasi mitra ("roll" atau "gulungan")
   const SELISIH_HAMPIR = 5;                  // ASUMSI A2: hampir habis kalau stok <= minimum + 5
   const SEMUA = 'SEMUA';
-  const { normalizeNote, localDateKey, isDateInRange, calendarDays, applyDateSelection } = window.AloPrototypeLogic;
+  const { normalizeNote, localDateKey, isDateInRange, calendarDays, applyDateSelection, applyTransaction, monthlyReport, transactionEffect, reportExportData, productFingerprint, applyProductAction, productExportData } = window.AloPrototypeLogic;
+  const PELAKU_DEMO = 'Staf demo (simulasi)';
+  const idPermintaan = () => crypto.randomUUID();
 
   // Data gudang dan merek: dari mitra, 20 Sep 2026 (docs/01-masalah/temuan-awal.md).
   // Daftar merek dipakai sebagai urutan saran, bukan larangan.
@@ -94,12 +96,17 @@
       ['FA-0009', 'keluar', 6, 'LARANGAN', '', 9 * HARI],
     ];
     const transaksi = t.map(([kode, jenis, jumlah, gudang, tujuan, lalu, catatan = ''], i) =>
-      ({ id: t.length - i, kode, jenis, jumlah, gudang, tujuan, catatan, waktu: new Date(now - lalu).toISOString() }));
-
-    return { produk, stok, transaksi, sheets: { status: 'ok', tertunda: 0, terakhir: new Date(now - 2 * MNT).toISOString() } };
+      ({ id: t.length - i, kode, jenis, jumlah, gudang, tujuan, catatan, waktu: new Date(now - lalu).toISOString(), pencatat: PELAKU_DEMO, status: 'aktif', jejak: [] }));
+    // Saldo pembuka hanya untuk fixture contoh baru, bukan migrasi saldo historis milik browser lama.
+    const palingAwal = new Date(Math.min(...transaksi.map(t => new Date(t.waktu).getTime())));
+    const pembukaan = {
+      waktu: new Date(palingAwal.getFullYear(), palingAwal.getMonth(), 1).toISOString(),
+      stok: stok.map(s => ({ produk: s.produk, gudang: s.gudang, jumlah: s.jumlah - transaksi.flatMap(transactionEffect).filter(e => e.produk === s.produk && e.gudang === s.gudang).reduce((a, e) => a + e.jumlah, 0) })),
+    };
+    return { produk, stok, transaksi, pembukaan };
   }
 
-  // Data tersimpan yang bentuknya tidak lengkap dulu membuat layar blank (galat di renderSync).
+  // Data tersimpan yang bentuknya tidak lengkap dulu membuat layar blank.
   // Sekarang: data rusak disalin ke kunci cadangan, lalu data contoh dimuat dan staf diberi tahu.
   let dataRusak = false;
   function muat() {
@@ -109,7 +116,6 @@
     try {
       const d = JSON.parse(raw);
       if (d && Array.isArray(d.produk) && Array.isArray(d.stok) && Array.isArray(d.transaksi)) {
-        if (!d.sheets || typeof d.sheets !== 'object') d.sheets = { status: 'ok', tertunda: 0, terakhir: new Date().toISOString() };
         return d;
       }
     } catch (e) { /* JSON rusak: ditangani di bawah */ }
@@ -119,9 +125,9 @@
   }
 
   // Penyimpanan bisa gagal (penuh atau diblokir). Dulu gagal diam-diam; sekarang staf diberi peringatan tetap.
-  function simpan() {
+  function simpan(data = state) {
     let berhasil = true;
-    try { localStorage.setItem(KUNCI_SIMPAN, JSON.stringify(state)); } catch (e) { berhasil = false; }
+    try { localStorage.setItem(KUNCI_SIMPAN, JSON.stringify(data)); } catch (e) { berhasil = false; }
     tampilkanPeringatanSimpan(!berhasil);
     return berhasil;
   }
@@ -133,17 +139,17 @@
       el.id = 'peringatanSimpan';
       el.className = 'peringatan-simpan';
       el.setAttribute('role', 'alert');
-      el.textContent = 'Perubahan terakhir belum tersimpan di browser ini karena penyimpanan penuh atau diblokir. Jangan muat ulang halaman sebelum masalah ini selesai.';
+      el.textContent = 'Perubahan belum tersimpan karena penyimpanan browser penuh atau diblokir. Data sebelumnya tetap digunakan. Periksa penyimpanan sebelum mencoba lagi.';
       document.querySelector('main').before(el);
     }
     el.hidden = false;
   }
 
   // Setiap produk wajib punya satu baris stok di tiap gudang; baris yang hilang dilengkapi (jumlah 0, tidak dipantau).
-  function lengkapiStok() {
-    const ada = new Set(state.stok.map((s) => `${s.produk}|${s.gudang}`));
-    state.produk.forEach((p) => GUDANG.forEach((g) => {
-      if (!ada.has(`${p.kode}|${g.kode}`)) state.stok.push({ produk: p.kode, gudang: g.kode, jumlah: 0, min: 0 });
+  function lengkapiStok(data = state) {
+    const ada = new Set(data.stok.map((s) => `${s.produk}|${s.gudang}`));
+    data.produk.forEach((p) => GUDANG.forEach((g) => {
+      if (!ada.has(`${p.kode}|${g.kode}`)) data.stok.push({ produk: p.kode, gudang: g.kode, jumlah: 0, min: 0 });
     }));
   }
 
@@ -217,9 +223,9 @@
   const kunciProduk = (p) => [norm(p.tipe), Number(p.lebar), Number(p.tebal), Number(p.panjang), Number(p.berat), norm(p.warna), norm(p.merek)].join('|');
 
   // KF-02: kode otomatis, satu identitas untuk semua gudang.
-  function kodeBerikut(tipe) {
+  function kodeBerikut(tipe, data = state) {
     const awalan = String(tipe).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4) || 'BRG';
-    const maks = state.produk
+    const maks = [...data.produk, ...(data.jejakProduk || []).map(j => j.produk)]
       .filter((p) => p.kode.startsWith(`${awalan}-`))
       .reduce((m, p) => Math.max(m, parseInt(p.kode.split('-')[1], 10) || 0), 0);
     return `${awalan}-${String(maks + 1).padStart(4, '0')}`;
@@ -258,10 +264,9 @@
     return teks;
   }
 
-  function saringProduk(q) {
+  function saringProduk(q, termasukArsip = false) {
     const token = norm(q).split(' ').filter(Boolean);
-    if (!token.length) return state.produk.slice();
-    return state.produk.filter((p) => {
+    return state.produk.filter(p => termasukArsip || p.status !== 'arsip').filter((p) => {
       const tumpukan = teksCariProduk(p);
       return token.every((t) => tumpukan.includes(t));
     });
@@ -286,63 +291,42 @@
     .map((s) => `${esc(pendekGudang(s.gudang))} ${nf.format(s.jumlah)}`)
     .join(' · ') || 'belum ada stok';
 
-  /* ================= Google Sheets (KF-07, KNF-03) ================= */
+  function dataTerbaru() {
+    let raw;
+    try { raw = localStorage.getItem(KUNCI_SIMPAN); }
+    catch (err) { throw new Error('Penyimpanan browser tidak dapat dibaca. Data tidak diubah.'); }
+    if (!raw) return state;
+    const data = JSON.parse(raw);
+    if (!data || !Array.isArray(data.produk) || !Array.isArray(data.stok) || !Array.isArray(data.transaksi)) throw new Error('Data browser tidak terbaca. Perubahan tidak disimpan.');
+    lengkapiStok(data);
+    return data;
+  }
 
-  function catatPerubahan() {
-    if (state.sheets.status === 'ok') state.sheets.terakhir = new Date().toISOString();
-    else state.sheets.tertunda += 1;
-    simpan();
-    renderSync();
+  async function simpanPerubahan(transform, resetDemo = false) {
+    if (!navigator.locks) throw new Error('Browser ini belum mendukung penyimpanan aman antar-tab. Buka prototipe melalui Chrome atau Edge terbaru.');
+    return navigator.locks.request(KUNCI_SIMPAN, () => {
+      const latest = resetDemo ? state : dataTerbaru();
+      const next = transform(latest);
+      if (next !== latest) {
+        next._revision = (latest._revision || 0) + 1;
+        if (!simpan(next)) throw new Error('Tidak bisa menyimpan di browser. Data tidak diubah. Coba lagi setelah penyimpanan tersedia.');
+      }
+      state = next; bangunIndeks();
+      return next;
+    });
   }
-  function waktuRelatif(iso) {
-    const menit = (Date.now() - new Date(iso).getTime()) / 60e3;
-    if (menit < 1) return 'baru saja';
-    if (menit < 60) return `${Math.floor(menit)} menit lalu`;
-    if (menit < 1440) return `${Math.floor(menit / 60)} jam lalu`;
-    return fTanggal.format(new Date(iso));
+
+  async function simpanTransaksi(command) {
+    return simpanPerubahan(latest => applyTransaction(latest, command, { actor: PELAKU_DEMO, now: new Date().toISOString() }));
   }
-  function renderSync() {
-    const s = state.sheets;
-    const el = $('#syncBtn');
-    if (s.status === 'ok') {
-      el.className = 'sync';
-      el.innerHTML = '<span class="dot" aria-hidden="true"></span><span class="sync-text">Tersalin ke Google Sheets</span><span class="sync-short">Sheets</span>';
-      el.setAttribute('aria-label', `Google Sheets tersalin, terakhir ${waktuRelatif(s.terakhir)}`);
-    } else {
-      el.className = 'sync gagal';
-      el.innerHTML = `<span class="dot" aria-hidden="true"></span><span class="sync-text">${s.tertunda} perubahan belum tersalin</span><span class="sync-short">${s.tertunda} belum tersalin</span>`;
-      el.setAttribute('aria-label', `${s.tertunda} perubahan belum tersalin ke Google Sheets`);
-    }
-  }
-  function bukaSync() {
-    const s = state.sheets;
-    const dlg = $('#dlgSync');
-    if (s.status === 'ok') {
-      $('#syncIsi').innerHTML = `
-        <div class="sheet-head"><div><h2 id="syncJudul">Google Sheets sudah tersalin</h2></div>
-          <button type="button" class="icon-btn" data-close aria-label="Tutup">&times;</button></div>
-        <div class="sheet-body"><p>Semua perubahan produk dan transaksi dari ketiga gudang sudah tersalin ke satu Google Sheets. Terakhir tersalin ${esc(waktuRelatif(s.terakhir))}.</p></div>
-        <div class="modal-foot"><button type="button" class="btn btn-secondary" data-close>Tutup</button></div>`;
-    } else {
-      $('#syncIsi').innerHTML = `
-        <div class="sheet-head"><div><h2 id="syncJudul">${s.tertunda} perubahan belum tersalin ke Google Sheets</h2></div>
-          <button type="button" class="icon-btn" data-close aria-label="Tutup">&times;</button></div>
-        <div class="sheet-body">
-          <p>Datanya tetap tersimpan di sistem, jadi stok yang tampil di sini sudah benar. Yang belum ikut berubah hanya salinan di Google Sheets.</p>
-          <p class="muted">Biasanya terjadi saat internet kantor putus. Kirim ulang setelah internet tersambung lagi.</p>
-        </div>
-        <div class="modal-foot">
-          <button type="button" class="btn btn-secondary" data-close>Nanti saja</button>
-          <button type="button" class="btn btn-primary" id="btnKirimUlang">Kirim ulang sekarang</button>
-        </div>`;
-      $('#btnKirimUlang').addEventListener('click', () => {
-        const n = state.sheets.tertunda;
-        state.sheets = { status: 'ok', tertunda: 0, terakhir: new Date().toISOString() };
-        simpan(); renderSync(); dlg.close();
-        toast(`${n} perubahan sudah tersalin ke Google Sheets.`);
-      });
-    }
-    dlg.showModal();
+
+  async function unduhExcel(data) {
+    const { createExcel } = await import('./excel.js?v=20261017-arsip');
+    const { blob, filename } = await createExcel(data);
+    const url = URL.createObjectURL(blob), a = document.createElement('a');
+    a.href = url; a.download = filename;
+    try { document.body.append(a); a.click(); }
+    finally { a.remove(); setTimeout(() => URL.revokeObjectURL(url), 30000); }
   }
 
   /* ================= toast ================= */
@@ -376,7 +360,7 @@
   function viewDashboard(main) {
     batasDashboard = LANGKAH_TAMPIL;
     const hariIni = localDateKey(new Date());
-    const txHariIni = transaksiGudang()
+    const txHariIni = transaksiGudang().filter(t => t.status !== 'dibatalkan')
       .filter((t) => localDateKey(t.waktu) === hariIni)
       .sort((a, b) => b.waktu.localeCompare(a.waktu));
 
@@ -417,7 +401,7 @@
     function renderDaftar() {
       const cocok = qDashboard.trim() ? new Set(saringProduk(qDashboard).map((p) => p.kode)) : null;
       const baris = [];
-      state.produk.forEach((p) => gudangTampil().forEach((kg) => {
+      state.produk.filter(p => p.status !== 'arsip').forEach((p) => gudangTampil().forEach((kg) => {
         const s = barisStok(p.kode, kg);
         if (!s) return;
         const st = statusDari(s.jumlah, s.min);
@@ -539,8 +523,10 @@
   let qProduk = '';
   let filterStatus = 'semua';
   let batasProduk = LANGKAH_TAMPIL;
+  let produkArsip = false;
 
   function viewProduk(main, params) {
+    if (params.get('arsip') === '1') produkArsip = true;
     main.innerHTML = `
       <div class="page-head">
         <div><h1 tabindex="-1">Produk<span class="judul-gudang">${esc(judulGudang())}</span></h1><p id="produkRingkas"></p></div>
@@ -552,6 +538,7 @@
             <label class="sr-only" for="qProduk">Cari produk</label>
             <input class="input" type="search" id="qProduk" placeholder="Cari kode, ukuran, warna…" value="${esc(qProduk)}">
           </div>
+          <div class="toolbar-select"><label class="sr-only" for="produkMode">Daftar produk</label><select class="input" id="produkMode"><option value="aktif">Produk aktif</option><option value="arsip">Arsip produk</option></select></div>
           <div class="toolbar-select">
             <label class="sr-only" for="fStatus">Status stok</label>
             <select class="input" id="fStatus">
@@ -566,27 +553,31 @@
       </section>`;
 
     $('#fStatus').value = filterStatus;
+    $('#produkMode').value = produkArsip ? 'arsip' : 'aktif';
+    $('#fStatus').disabled = produkArsip;
     batasProduk = LANGKAH_TAMPIL;
 
     const isi = () => {
-      const semuaGudang = gudangAktif === SEMUA;
-      const tercatat = state.produk.filter((p) => semuaGudang || disimpanDi(p.kode, gudangAktif));
-      const hasil = saringProduk(qProduk)
+      const semuaGudang = produkArsip || gudangAktif === SEMUA;
+      const tercatat = state.produk.filter(p => (p.status === 'arsip') === produkArsip).filter((p) => semuaGudang || disimpanDi(p.kode, gudangAktif));
+      const hasil = saringProduk(qProduk, true).filter(p => (p.status === 'arsip') === produkArsip)
         .filter((p) => semuaGudang || disimpanDi(p.kode, gudangAktif))
         .filter((p) => {
-          if (filterStatus === 'semua') return true;
+          if (produkArsip || filterStatus === 'semua') return true;
           if (semuaGudang) return statusGabungan(p.kode) === filterStatus;
           const s = barisStok(p.kode, gudangAktif);
           return s && statusDari(s.jumlah, s.min) === filterStatus;
         })
         .sort((a, b) => a.kode.localeCompare(b.kode));
 
-      $('#produkRingkas').textContent = hasil.length === tercatat.length
+      $('#produkRingkas').textContent = produkArsip ? `${hasil.length} produk arsip di seluruh gudang. Identitas dan riwayat tetap tersimpan.` : hasil.length === tercatat.length
         ? `${tercatat.length} produk tercatat${semuaGudang ? ' di seluruh gudang' : ` di ${labelGudang(gudangAktif)}`}.`
         : `Menampilkan ${hasil.length} dari ${tercatat.length} produk.`;
 
       const wadah = $('#produkIsi');
-      if (!state.produk.length) {
+      if (produkArsip && !tercatat.length) {
+        wadah.innerHTML = '<div class="empty-state"><h3>Belum ada produk arsip</h3><p>Produk yang diarsipkan dapat dibuka dan dipulihkan dari sini.</p></div>';
+      } else if (!state.produk.length) {
         wadah.innerHTML = `<div class="empty-state"><h3>Belum ada produk</h3><p>Tambahkan produk pertama supaya stoknya bisa dicatat.</p><button type="button" class="btn btn-primary" data-tambah>Tambah produk</button></div>`;
       } else if (!tercatat.length) {
         wadah.innerHTML = `<div class="empty-state"><h3>Belum ada produk di ${esc(labelGudang(gudangAktif))}</h3><p>Produk muncul di sini setelah barangnya dicatat masuk ke gudang ini.</p><a class="btn btn-quiet" href="#/transaksi?jenis=masuk&gudang=${esc(gudangAktif)}">Catat barang masuk</a></div>`;
@@ -615,8 +606,8 @@
                 <td data-label="Spesifikasi" class="stack">${specHTML(p)}${p.catatan ? `<p class="catatan"><strong>Catatan:</strong> ${esc(p.catatan)}</p>` : ''}</td>
                 <td data-label="${esc(kolomStok)}" class="r num">${kolomJumlah}</td>
                 <td data-label="Minimum" class="r num">${kolomMin}</td>
-                <td data-label="Status">${badge(st)}</td>
-                <td class="r act"><a class="btn btn-secondary btn-sm" href="#/transaksi?kode=${encodeURIComponent(p.kode)}">Catat transaksi</a></td>
+                <td data-label="Status">${produkArsip ? `<span class="tx-status cancelled">Arsip</span><p class="small muted">${esc(waktuLengkap(p.diarsipkan))}</p>` : badge(st)}</td>
+                <td class="r act"><div class="product-actions">${produkArsip ? '' : `<a class="btn btn-secondary btn-sm" href="#/transaksi?kode=${encodeURIComponent(p.kode)}">Catat transaksi</a>`}<button type="button" class="btn ${produkArsip ? 'btn-secondary' : 'btn-quiet'} btn-sm" data-product="${esc(p.kode)}" aria-label="${produkArsip ? 'Buka arsip' : 'Hapus produk'} ${esc(p.kode)}">${produkArsip ? 'Buka arsip' : 'Hapus'}</button></div></td>
               </tr>`; }).join('')}
             </tbody>
           </table></div>${tombolTampilLagi(Math.min(batasProduk, hasil.length), hasil.length, 'produkTampilLagi')}`;
@@ -627,8 +618,15 @@
     const cariTertunda = tunda(() => { batasProduk = LANGKAH_TAMPIL; isi(); });
     $('#qProduk').addEventListener('input', (e) => { qProduk = e.target.value; cariTertunda(); });
     $('#fStatus').addEventListener('change', (e) => { filterStatus = e.target.value; batasProduk = LANGKAH_TAMPIL; isi(); });
+    $('#produkMode').addEventListener('change', e => {
+      produkArsip = e.target.value === 'arsip';
+      history.replaceState(null, '', '#/produk');
+      viewProduk(main, new URLSearchParams()); $('#produkMode').focus();
+    });
     $('#produkIsi').addEventListener('click', (e) => {
       if (e.target.closest('#produkTampilLagi')) { batasProduk += LANGKAH_TAMPIL; isi(); }
+      const action = e.target.closest('[data-product]');
+      if (action) bukaProdukAksi(action.dataset.product);
     });
     $('#btnTambah').addEventListener('click', bukaFormProduk);
     isi();
@@ -638,6 +636,69 @@
       bukaFormProduk();
     }
   }
+
+  let produkAksiAktif;
+  function bukaProdukAksi(kode, batas = 20) {
+    try { state = dataTerbaru(); bangunIndeks(); }
+    catch (err) { toast(esc(err.message)); return; }
+    const p = cariProduk(kode);
+    if (!p) { toast('Produk sudah berubah atau dihapus. Buka daftar terbaru.'); route(); return; }
+    produkAksiAktif = kode;
+    const archived = p.status === 'arsip';
+    const tx = state.transaksi.filter(t => t.kode === kode).sort((a, b) => b.waktu.localeCompare(a.waktu));
+    const zero = stokProduk(kode).length === 3 && stokProduk(kode).every(s => s.jumlah === 0);
+    const dlg = $('#dlgProdukAksi'), host = $('#produkAksiIsi');
+    const requestId = idPermintaan();
+    let receipt = '', busy = false;
+    host.innerHTML = `<div class="sheet-head"><div><h2 id="produkAksiJudul" tabindex="-1">${archived ? 'Arsip produk' : tx.length ? 'Unduh rekap sebelum mengarsipkan' : 'Hapus produk'}</h2><p class="small muted">${esc(kode)}</p></div><button type="button" class="icon-btn" data-close aria-label="Tutup produk">&times;</button></div>
+      <div class="sheet-body"><div class="id-line"><strong class="kode">${esc(kode)}</strong>${specHTML(p)}</div>${p.catatan ? `<p class="catatan">Catatan: ${esc(p.catatan)}</p>` : ''}
+        <div class="archive-info"><p><strong>Stok seluruh gudang</strong></p><p class="num">${GUDANG.map(g => `${esc(g.nama)}: ${nf.format(barisStok(kode, g.kode)?.jumlah || 0)}`).join(' · ')} ${SATUAN}</p>
+        <p>${archived ? `Diarsipkan ${esc(waktuLengkap(p.diarsipkan))} oleh ${esc(p.pengarsip)}. Pulihkan untuk mencatat atau mengoreksi transaksi pada produk yang sama.` : !zero ? 'Produk belum bisa dihapus atau diarsipkan. Stok harus nol di ketiga gudang. Selesaikan pencatatan barang sesuai kondisi fisik terlebih dahulu.' : tx.length ? 'Riwayat produk tetap tersimpan setelah diarsipkan. Unduh rekap seluruh periode terlebih dahulu, lalu pilih Arsipkan.' : 'Produk ini belum pernah mempunyai transaksi. Penghapusan bersifat permanen.'}</p></div>
+        <p class="small muted">Rekap memuat tanggal/jam WIB, produk, gudang, jumlah, catatan, pencatat, dan status. Transaksi dibatalkan tetap disertakan.</p>
+        <p class="small" id="produkAksiStatus" role="status"></p><p class="field-error" id="produkAksiError" role="alert" tabindex="-1" hidden></p>
+        <h3>Riwayat transaksi (${tx.length})</h3><ol class="archive-history">${tx.slice(0, batas).map(t => `<li><strong>${esc(waktuLengkap(t.waktu))} · ${esc(jenisLabel(t))}</strong><p>${esc(lokasiTransaksi(t))} · ${nf.format(t.jumlah)} ${SATUAN} · ${statusTransaksi(t)}</p><p class="small muted">${esc(t.catatan || 'Tanpa catatan')} · ${esc(pelakuTransaksi(t))}</p></li>`).join('')}</ol>${tx.length > batas ? '<button type="button" class="btn btn-secondary" id="produkRiwayatLagi">Tampilkan riwayat berikutnya</button>' : !tx.length ? '<p class="muted small">Belum ada transaksi.</p>' : ''}
+      </div><div class="sheet-foot"><button type="button" class="btn btn-secondary" data-close>Batal</button>${tx.length ? '<button type="button" class="btn btn-secondary" id="produkUnduh">Unduh rekap</button>' : ''}${zero ? `<button type="button" class="btn ${archived ? 'btn-primary' : 'btn-danger'}" id="produkKonfirmasi" ${!archived && tx.length ? 'disabled' : ''}>${archived ? 'Pulihkan produk' : tx.length ? 'Arsipkan' : 'Hapus permanen'}</button>` : ''}</div>`;
+    const error = message => { const box = $('#produkAksiError'); box.textContent = message; box.hidden = false; box.focus(); };
+    const confirm = $('#produkKonfirmasi'), download = $('#produkUnduh');
+    const current = () => dlg.open && $('#produkAksiIsi') === host && host.dataset.request === requestId;
+    host.dataset.request = requestId;
+    download?.addEventListener('click', async () => {
+      if (busy) return; busy = true; download.disabled = true;
+      if (confirm) confirm.disabled = true;
+      $('#produkAksiError').hidden = true;
+      try {
+        const snapshot = dataTerbaru();
+        const stamp = productFingerprint(snapshot, kode);
+        await unduhExcel(productExportData(snapshot, kode));
+        if (!current()) return;
+        receipt = stamp;
+        $('#produkAksiStatus').textContent = 'Unduhan sudah dimulai. Pastikan file tersimpan sebelum melanjutkan. Jika data berubah, unduh rekap terbaru.';
+      } catch (err) { if (current()) error(err.message); }
+      finally {
+        busy = false;
+        if (current()) { download.disabled = false; if (confirm) confirm.disabled = !archived && tx.length > 0 && !receipt; }
+      }
+    });
+    confirm?.addEventListener('click', async () => {
+      if (busy || confirm.disabled) return;
+      busy = true; confirm.disabled = true; if (download) download.disabled = true;
+      try {
+        await simpanPerubahan(latest => applyProductAction(latest, { action: archived ? 'restore' : tx.length ? 'archive' : 'delete', kode, version: p.version || 0, requestId, receipt }, { actor: PELAKU_DEMO, now: new Date().toISOString() }));
+        if (current()) dlg.close();
+        route(); toast(archived ? 'Produk dipulihkan. Kode dan riwayat tetap sama; stok tetap nol.' : tx.length ? 'Produk diarsipkan. Buka Arsip produk untuk melihat riwayat atau memulihkannya.' : 'Produk tanpa transaksi dihapus permanen.');
+      } catch (err) {
+        if (current()) { receipt = ''; error(err.message); confirm.disabled = !archived && tx.length > 0; if (download) download.disabled = false; }
+      } finally { busy = false; }
+    });
+    $('#produkRiwayatLagi')?.addEventListener('click', () => bukaProdukAksi(kode, batas + 20));
+    if (!dlg.open) dlg.showModal();
+    $('#produkAksiJudul').focus();
+  }
+
+  $('#dlgProdukAksi').addEventListener('close', () => {
+    const trigger = $$('[data-product]').find(b => b.dataset.product === produkAksiAktif) || $('#produkMode');
+    trigger?.focus({ preventScroll: true });
+  });
 
   /* ================= form tambah produk ================= */
 
@@ -681,7 +742,8 @@
         box.scrollIntoView({ block: 'nearest', behavior: halus ? 'smooth' : 'auto' });
       }
       $('#dupIsi').innerHTML = `<div class="id-line"><span class="kode">${esc(kembar.kode)}</span>${specHTML(kembar)}</div><p class="small num">Stok saat ini: ${rincianStok(kembar.kode)}.</p>`;
-      $('#dupPakai').href = `#/transaksi?jenis=masuk&kode=${encodeURIComponent(kembar.kode)}&gudang=${encodeURIComponent(v.gudang)}`;
+      $('#dupPakai').href = kembar.status === 'arsip' ? '#/produk?arsip=1' : `#/transaksi?jenis=masuk&kode=${encodeURIComponent(kembar.kode)}&gudang=${encodeURIComponent(v.gudang)}`;
+      $('#dupPakai').textContent = kembar.status === 'arsip' ? 'Buka Arsip untuk memulihkan produk ini' : 'Catat barang masuk ke produk ini';
     } else {
       box.hidden = true;
       $('#dupOverride').checked = false;
@@ -703,6 +765,8 @@
 
   function bukaFormProduk() {
     formProduk.reset();
+    $('button[type="submit"]', formProduk).disabled = false;
+    $('#produkSimpanError').hidden = true;
     $$('.field-error', formProduk).forEach((e) => { e.hidden = true; });
     $$('[aria-invalid]', formProduk).forEach((e) => e.removeAttribute('aria-invalid'));
     const selGudang = formProduk.elements.gudang;
@@ -729,7 +793,7 @@
   });
   $('#dupPakai').addEventListener('click', () => $('#dlgProduk').close());
 
-  formProduk.addEventListener('submit', (e) => {
+  formProduk.addEventListener('submit', async (e) => {
     e.preventDefault();
     const v = nilaiForm();
     let salahPertama = null;
@@ -753,16 +817,25 @@
       return;
     }
 
+    const submit = $('button[type="submit"]', formProduk);
+    if (submit.disabled) return;
+    submit.disabled = true;
     const baru = {
-      kode: kodeBerikut(v.tipe), tipe: v.tipe,
+      tipe: v.tipe,
       lebar: parseAngka(v.lebar), tebal: parseAngka(v.tebal), panjang: parseAngka(v.panjang), berat: parseAngka(v.berat),
       warna: v.warna, merek: v.merek, catatan: v.catatan,
     };
-    state.produk.push(baru);
-    // Satu baris stok per gudang. Gudang terpilih langsung dipantau; gudang lain menyusul saat ada barang masuk.
-    GUDANG.forEach((g) => state.stok.push({ produk: baru.kode, gudang: g.kode, jumlah: 0, min: g.kode === v.gudang ? parseInt(v.min, 10) : 0 }));
-    bangunIndeks();
-    catatPerubahan();
+    try {
+      await simpanPerubahan(latest => {
+        const duplicate = latest.produk.some(p => kunciProduk(p) === kunciProduk(baru));
+        if (duplicate && !$('#dupOverride').checked) throw new Error('Produk dengan spesifikasi ini sudah ada. Periksa daftar terbaru sebelum menyimpan.');
+        baru.kode = kodeBerikut(v.tipe, latest);
+        return { ...latest, produk: [...latest.produk, baru], stok: [...latest.stok, ...GUDANG.map(g => ({ produk: baru.kode, gudang: g.kode, jumlah: 0, min: g.kode === v.gudang ? parseInt(v.min, 10) : 0 }))] };
+      });
+    } catch (err) {
+      $('#produkSimpanError').textContent = err.message; $('#produkSimpanError').hidden = false; submit.disabled = false;
+      return;
+    }
     $('#dlgProduk').close();
     route();
     toast(`Produk <strong>${esc(baru.kode)}</strong> tersimpan di ${esc(namaGudang(v.gudang))}. Stok awalnya 0 ${SATUAN}.`,
@@ -772,7 +845,10 @@
   /* ================= halaman: catat transaksi ================= */
 
   function viewTransaksi(main, params) {
+    const dariLaporan = params.get('laporan') === '1';
+    const requestId = idPermintaan();
     let dipilih = params.get('kode') ? cariProduk(params.get('kode')) || null : null;
+    if (dipilih?.status === 'arsip') { dipilih = null; toast('Pulihkan produk dari Arsip sebelum mencatat transaksi.'); }
     const jenisParam = params.get('jenis');
     const jenisAwal = ['masuk', 'keluar', 'pindah'].includes(jenisParam) ? jenisParam : 'masuk';
     const gudangParam = params.get('gudang');
@@ -783,7 +859,8 @@
 
     main.innerHTML = `
       <div class="page-head">
-        <div><h1 tabindex="-1">Catat transaksi</h1><p>Stok langsung diperbarui begitu transaksi disimpan.</p></div>
+        <div>${dariLaporan ? '<h2 id="laporanFormJudul">Tambah transaksi dari Laporan</h2>' : '<h1 tabindex="-1">Catat transaksi</h1>'}<p>Data contoh lokal. Pencatat: ${PELAKU_DEMO}.</p></div>
+        ${dariLaporan ? '<button type="button" class="icon-btn" data-close aria-label="Tutup">&times;</button>' : ''}
       </div>
       <div class="tx-layout">
         <form class="panel tx-form" id="txForm" novalidate>
@@ -837,6 +914,7 @@
           </div>
 
           <div id="txPreview" aria-live="polite"></div>
+          <p class="field-error" id="txSimpanError" role="alert" hidden></p>
 
           <div class="form-foot">
             <p class="muted small">Waktu transaksi dicatat otomatis saat disimpan.</p>
@@ -968,7 +1046,7 @@
     }
 
     function renderTerakhir() {
-      const daftar = transaksiGudang().sort((a, b) => b.waktu.localeCompare(a.waktu)).slice(0, 6);
+      const daftar = transaksiGudang().filter(t => t.status !== 'dibatalkan').sort((a, b) => b.waktu.localeCompare(a.waktu)).slice(0, 6);
       $('#txTerakhir').innerHTML = daftar.length
         ? `<ul class="feed">${daftar.map(barisFeed).join('')}</ul>`
         : '<div class="empty-state compact"><p>Belum ada transaksi. Transaksi yang kamu simpan akan muncul di sini.</p></div>';
@@ -989,7 +1067,7 @@
     selGudang.addEventListener('change', () => { $('#err-gudang').hidden = true; renderPilihan(); renderPreview(); });
     selTujuan.addEventListener('change', () => { $('#err-tujuan').hidden = true; renderPreview(); });
 
-    f.addEventListener('submit', (e) => {
+    f.addEventListener('submit', async (e) => {
       e.preventDefault();
       const j = jenis();
       let salah = null;
@@ -1009,34 +1087,18 @@
       }
       if (salah) { salah.focus(); return; }
 
-      const n = parseInt(inputJumlah.value, 10);
-      const s = stokAsal();
-      if ((j === 'keluar' || j === 'pindah') && n > s.jumlah) { renderPreview(); return; }
-
-      if (j === 'masuk') s.jumlah += n;
-      else s.jumlah -= n;
-
-      let pesan;
-      if (j === 'pindah') {
-        const sT = barisStok(dipilih.kode, selTujuan.value);
-        sT.jumlah += n;
-        // Gudang tujuan yang belum dipantau ikut memakai batas minimum yang sama.
-        if (sT.min <= 0) sT.min = Math.max(...stokProduk(dipilih.kode).map((x) => x.min), 0);
-        pesan = `Pindah gudang tersimpan. <strong>${esc(dipilih.kode)}</strong> di ${esc(pendekGudang(selGudang.value))} ${nf.format(s.jumlah)}, di ${esc(pendekGudang(selTujuan.value))} ${nf.format(sT.jumlah)} ${SATUAN}.`;
-      } else {
-        if (j === 'masuk' && s.min <= 0) s.min = Math.max(...stokProduk(dipilih.kode).map((x) => x.min), 0);
-        pesan = `${j === 'masuk' ? 'Barang masuk' : 'Barang keluar'} tersimpan. Stok <strong>${esc(dipilih.kode)}</strong> di ${esc(namaGudang(selGudang.value))} sekarang ${nf.format(s.jumlah)} ${SATUAN}.`;
+      const submit = $('#txSubmit');
+      if (submit.disabled) return;
+      submit.disabled = true;
+      try {
+        await simpanTransaksi({ action: 'add', requestId, kode: dipilih.kode, jenis: j, jumlah: Number(inputJumlah.value), gudang: selGudang.value, tujuan: selTujuan.value, catatan: j === 'masuk' ? '' : inputCatatan.value });
+      } catch (err) {
+        const box = $('#txSimpanError'); box.textContent = err.message; box.hidden = false;
+        submit.disabled = false;
+        return;
       }
-
-      const id = state.transaksi.reduce((m, t) => Math.max(m, t.id), 0) + 1;
-      state.transaksi.push({
-        id, kode: dipilih.kode, jenis: j, jumlah: n,
-        gudang: selGudang.value, tujuan: j === 'pindah' ? selTujuan.value : '',
-        catatan: j === 'masuk' ? '' : normalizeNote(inputCatatan.value),
-        waktu: new Date().toISOString(),
-      });
-      catatPerubahan();
-      toast(pesan);
+      toast('Transaksi tersimpan di browser ini. Stok dan laporan diperbarui.');
+      if (dariLaporan) { $('#dlgLaporanForm').close(); viewLaporan($('#view')); return; }
 
       dipilih = null;
       inputJumlah.value = 1;
@@ -1044,6 +1106,8 @@
       renderPilihan(); renderPreview(); renderTerakhir();
       const cari = $('#txCari');
       if (cari) cari.focus();
+      // Form berikutnya mendapat ID permintaan baru; event kedua dari form lama tidak dapat mencatat ulang.
+      viewTransaksi(main, params);
     });
 
     renderJenis();
@@ -1051,6 +1115,189 @@
     renderPreview();
     renderTerakhir();
   }
+
+  /* ================= laporan dan detail transaksi (KF-16–18) ================= */
+
+  let bulanLaporan = localDateKey(new Date()).slice(0, 7);
+  let cariLaporan = '';
+  let batasLaporan = LANGKAH_TAMPIL;
+  let detailAktif = null;
+  const jenisLabel = t => ({ masuk: 'Barang masuk', keluar: 'Keluar customer', pindah: 'Pindah gudang' }[t.jenis] || t.jenis);
+  const statusTransaksi = t => t.status === 'dibatalkan' ? 'Dibatalkan' : 'Aktif';
+  const waktuLengkap = iso => `${fTanggalRingkas.format(new Date(iso))}, ${fJam.format(new Date(iso))}`;
+  const lokasiTransaksi = t => t.jenis === 'pindah' ? `${namaGudang(t.gudang)} → ${namaGudang(t.tujuan)}` : namaGudang(t.gudang);
+  const pelakuTransaksi = t => t.pencatat || 'Belum tercatat (data lama)';
+  const statusHTML = t => `<span class="tx-status ${t.status === 'dibatalkan' ? 'cancelled' : ''}">${statusTransaksi(t)}</span>`;
+
+  function viewLaporan(main) {
+    let downloading = false;
+    main.innerHTML = `
+      <div class="page-head">
+        <div><h1 tabindex="-1">Laporan<span class="judul-gudang">${esc(judulGudang())}</span></h1><p>Rekap stok bulanan dan transaksi dari catatan yang sama.</p></div>
+        <div class="report-head-actions"><button type="button" class="btn btn-secondary" id="laporanExcel" aria-describedby="laporanDownloadInfo">Unduh Excel</button><button type="button" class="btn btn-secondary" id="laporanKeTransaksi">Lihat transaksi</button><button type="button" class="btn btn-primary" id="laporanTambah">Tambah transaksi</button></div>
+      </div>
+      <section class="panel report-filters" aria-label="Filter laporan">
+        <div class="toolbar">
+          <div class="field"><label for="laporanBulan">Bulan laporan</label><input type="month" class="input" id="laporanBulan" value="${bulanLaporan}"></div>
+          <div class="field search"><label for="laporanCari">Cari produk</label><input type="search" class="input" id="laporanCari" value="${esc(cariLaporan)}" placeholder="Kode, ukuran, warna, merek…"></div>
+          <button type="button" class="btn btn-secondary" id="laporanReset">Reset filter</button>
+        </div>
+        <p class="report-context small muted" id="laporanKonteks" aria-live="polite"></p>
+        <p class="report-context small muted" id="laporanDownloadInfo">Excel memuat Rekap Bulanan dan Detail Transaksi, mengikuti semua hasil filter.</p>
+        <p class="report-context field-error" id="laporanExcelError" role="alert" hidden></p>
+      </section>
+      <section class="panel report-section" aria-labelledby="rekapJudul">
+        <div class="panel-head"><h2 id="rekapJudul">Rekap stok bulanan</h2><span class="small muted">Satuan: gulungan</span></div>
+        <p class="report-context small muted">Stok awal dan akhir mengikuti periode laporan. Stok saat ini tersedia di Dashboard. Pindahan dicatat terpisah dari keluar ke customer.</p>
+        <div id="laporanRekap"></div>
+        <p class="report-context small muted">Data contoh. Rekap memakai transaksi aktif beserta koreksi yang tersimpan sekarang. Aturan koreksi bulan lampau masih dibahas.</p>
+      </section>
+      <section class="panel report-section" aria-labelledby="detailDaftarJudul">
+        <div class="panel-head"><h2 id="detailDaftarJudul" tabindex="-1">Detail Transaksi</h2><span class="small muted" id="laporanJumlah"></span></div>
+        <p class="report-context small muted">Buka transaksi untuk melihat catatan, pencatat, serta jejak edit dan pembatalannya.</p>
+        <div id="laporanTransaksi"></div>
+      </section>
+      <p class="report-limit small muted">Prototipe lokal di browser ini; belum menggunakan akun atau database bersama. Jejak perubahan dapat dibaca melalui Detail Transaksi di website.</p>`;
+
+    function isi() {
+      const cocok = new Set(saringProduk(cariLaporan, true).map(p => p.kode));
+      const valid = /^\d{4}-(0[1-9]|1[0-2])$/.test(bulanLaporan) && bulanLaporan <= localDateKey(new Date()).slice(0, 7);
+      const rows = valid ? monthlyReport(state, bulanLaporan, gudangAktif).filter(r => cocok.has(r.kode)) : [];
+      const tx = valid ? transaksiGudang().filter(t => localDateKey(t.waktu).slice(0, 7) === bulanLaporan && cocok.has(t.kode)).sort((a, b) => b.waktu.localeCompare(a.waktu)) : [];
+      $('#laporanExcel').disabled = downloading || (!rows.length && !tx.length);
+      const periode = valid ? fBulanTahun.format(tanggalDariKey(`${bulanLaporan}-01`)) : 'Pilih bulan yang sudah berlangsung';
+      $('#laporanKonteks').textContent = `${periode} · ${labelGudang(gudangAktif)}${cariLaporan.trim() ? ` · pencarian “${cariLaporan.trim()}”` : ''}.`;
+      const saldo = n => n == null ? '<span class="muted small">Belum tersedia</span>' : nf.format(n);
+      $('#laporanRekap').innerHTML = rows.length ? `<div class="table-wrap" tabindex="0" role="region" aria-label="Tabel rekap stok, geser untuk melihat semua kolom"><table class="data report-table rekap-table">
+        <thead><tr><th scope="col">Produk</th><th scope="col">Gudang</th>${['Stok awal', 'Masuk', 'Pindah masuk', 'Keluar customer', 'Pindah keluar', 'Stok akhir'].map(s => `<th scope="col" class="r">${s}</th>`).join('')}</tr></thead>
+        <tbody>${rows.slice(0, batasLaporan).map(r => `<tr><td data-label="Produk"><span class="kode">${esc(r.kode)}</span><p class="small muted">${esc(specTeks(cariProduk(r.kode)))}</p></td><td data-label="Gudang">${tagGudang(r.gudang)}</td>${[['awal', 'Stok awal'], ['masuk', 'Masuk'], ['pindahMasuk', 'Pindah masuk'], ['keluar', 'Keluar customer'], ['pindahKeluar', 'Pindah keluar'], ['akhir', 'Stok akhir']].map(([k, label]) => `<td class="r num" data-label="${label}">${saldo(r[k])}</td>`).join('')}</tr>`).join('')}</tbody>
+        </table></div>${tombolTampilLagi(Math.min(batasLaporan, rows.length), rows.length, 'rekapLagi')}` : '<div class="empty-state compact"><h3>Tidak ada rekap di pilihan ini</h3><p>Ubah bulan, gudang, atau pencarian. Gunakan Reset filter untuk kembali ke bulan ini dan semua gudang.</p></div>';
+      $('#laporanJumlah').textContent = `${tx.length} transaksi`;
+      $('#laporanTransaksi').innerHTML = tx.length ? `<div class="table-wrap"><table class="data report-transactions">
+        <thead><tr><th scope="col">Tanggal / jam</th><th scope="col">Produk</th><th scope="col">Jenis / gudang</th><th scope="col" class="r">Jumlah</th><th scope="col">Status</th><th scope="col">Detail</th></tr></thead>
+        <tbody>${tx.slice(0, batasLaporan).map(t => `<tr>
+          <td data-label="Waktu" class="small">${esc(waktuLengkap(t.waktu))}</td>
+          <td data-label="Produk"><span class="kode">${esc(t.kode)}</span><p class="small muted">${esc(specTeks(cariProduk(t.kode) || {}))}</p></td>
+          <td data-label="Transaksi">${esc(jenisLabel(t))}<p class="small muted">${esc(lokasiTransaksi(t))}</p></td>
+          <td data-label="Jumlah" class="r num"><strong>${nf.format(t.jumlah)}</strong> <span class="small muted">${SATUAN}</span></td>
+          <td data-label="Status">${statusHTML(t)}</td>
+          <td class="act"><button type="button" class="btn btn-secondary btn-sm" data-detail="${t.id}" aria-label="Buka transaksi ${t.id}, ${esc(t.kode)}">Buka detail</button></td>
+        </tr>`).join('')}</tbody></table></div>${tombolTampilLagi(Math.min(batasLaporan, tx.length), tx.length, 'transaksiLagi')}` : '<div class="empty-state compact"><h3>Tidak ada transaksi yang cocok</h3><p>Belum ada transaksi untuk bulan, gudang, dan pencarian ini.</p></div>';
+    }
+    $('#laporanBulan').addEventListener('change', e => { bulanLaporan = e.target.value; batasLaporan = LANGKAH_TAMPIL; isi(); });
+    const cariTertunda = tunda(isi);
+    $('#laporanCari').addEventListener('input', e => { cariLaporan = e.target.value; batasLaporan = LANGKAH_TAMPIL; cariTertunda(); });
+    $('#laporanReset').addEventListener('click', () => {
+      bulanLaporan = localDateKey(new Date()).slice(0, 7); cariLaporan = ''; gudangAktif = SEMUA; batasLaporan = LANGKAH_TAMPIL;
+      try { localStorage.setItem(KUNCI_GUDANG, gudangAktif); } catch (err) { /* hanya preferensi */ }
+      renderPilihGudang(); viewLaporan(main); $('#laporanBulan').focus();
+    });
+    $('#laporanTambah').addEventListener('click', () => {
+      viewTransaksi($('#laporanFormIsi'), new URLSearchParams({ laporan: '1' }));
+      $('#dlgLaporanForm').showModal();
+    });
+    $('#laporanKeTransaksi').addEventListener('click', () => {
+      $('#detailDaftarJudul').scrollIntoView({ block: 'start' }); $('#detailDaftarJudul').focus({ preventScroll: true });
+    });
+    $('#laporanExcel').addEventListener('click', async () => {
+      if (downloading) return;
+      const button = $('#laporanExcel');
+      const errorBox = $('#laporanExcelError');
+      downloading = true; button.disabled = true; button.textContent = 'Membuat Excel…'; errorBox.hidden = true;
+      try {
+        state = dataTerbaru(); bangunIndeks();
+        const data = { ...reportExportData(state, bulanLaporan, gudangAktif, saringProduk(cariLaporan, true).map(p => p.kode)), month: bulanLaporan, gudang: gudangAktif, search: cariLaporan };
+        await unduhExcel(data);
+        toast('Unduhan Excel dimulai, mengikuti filter saat tombol ditekan. Pastikan file tersimpan.');
+      } catch (error) {
+        errorBox.textContent = error.message; errorBox.hidden = false;
+      } finally {
+        downloading = false; button.textContent = 'Unduh Excel';
+        if (button.isConnected) isi();
+      }
+    });
+    function onKlikLaporan(e) {
+      const detail = e.target.closest('[data-detail]');
+      if (detail) bukaDetail(Number(detail.dataset.detail));
+      if (e.target.closest('#rekapLagi, #transaksiLagi')) { batasLaporan += LANGKAH_TAMPIL; isi(); }
+    }
+    $('#laporanTransaksi').addEventListener('click', onKlikLaporan);
+    $('#laporanRekap').addEventListener('click', onKlikLaporan);
+    isi();
+  }
+
+  function bukaDetail(id, mode = '', batasJejak = 20) {
+    const t = state.transaksi.find(t => t.id === id);
+    if (!t) return;
+    detailAktif = id;
+    const dlg = $('#dlgDetail');
+    const p = cariProduk(t.kode);
+    const jejak = [...(t.jejak || [])].reverse();
+    const dibatalkan = t.status === 'dibatalkan';
+    if (p?.status === 'arsip') mode = '';
+    $('#detailIsi').innerHTML = `
+      <div class="sheet-head"><div><h2 id="detailJudul" tabindex="-1">Transaksi #${t.id}</h2><p class="small muted">${esc(jenisLabel(t))} · ${esc(waktuLengkap(t.waktu))}</p></div><button type="button" class="icon-btn" data-close aria-label="Tutup detail">&times;</button></div>
+      <div class="sheet-body">
+        <div class="id-line"><strong class="kode">${esc(t.kode)}</strong>${statusHTML(t)}</div>
+        ${p ? `<p class="detail-spec">${specHTML(p)}</p>${p.status === 'arsip' ? '<p class="archive-info">Produk diarsipkan. Pulihkan dari Arsip produk sebelum mengoreksi transaksi.</p>' : ''}` : '<p>Produk tidak ditemukan.</p>'}
+        <dl class="detail-fields"><div><dt>Gudang</dt><dd>${esc(lokasiTransaksi(t))}</dd></div><div><dt>Jumlah</dt><dd class="num">${nf.format(t.jumlah)} ${SATUAN}</dd></div><div><dt>Catatan</dt><dd>${esc(t.catatan || 'Tidak ada catatan')}</dd></div><div><dt>Pencatat</dt><dd>${esc(pelakuTransaksi(t))}</dd></div></dl>
+        ${mode ? `<form id="detailForm" class="detail-editor" novalidate>
+          <h3>${mode === 'edit' ? 'Edit transaksi' : 'Batalkan transaksi'}</h3>
+          ${mode === 'edit' ? `<p class="small muted">Koreksi jumlah atau catatan pada transaksi yang sama. Produk, gudang, dan waktu tetap.</p><div class="field"><label for="detailJumlah">Jumlah (${SATUAN})</label><input class="input" id="detailJumlah" inputmode="numeric" value="${t.jumlah}" aria-describedby="detailError"></div><div class="field"><label for="detailCatatan">Catatan <span class="opt">(boleh kosong)</span></label><textarea class="input" id="detailCatatan" maxlength="300" rows="3">${esc(t.catatan)}</textarea></div>` : '<p>Pengaruh stok transaksi ini akan dikembalikan. Catatan dan jejaknya tetap tersimpan.</p>'}
+          <div class="field"><label for="detailAlasan">Alasan ${mode === 'edit' ? 'edit' : 'pembatalan'} <span class="opt">(wajib)</span></label><textarea class="input" id="detailAlasan" maxlength="300" rows="3" aria-describedby="detailError" required></textarea></div>
+          <p class="field-error" id="detailError" role="alert" tabindex="-1" hidden></p>
+          <div class="detail-actions"><button type="button" class="btn btn-secondary" id="detailUrungkan">Kembali</button><button type="submit" class="btn ${mode === 'edit' ? 'btn-primary' : 'btn-danger'}">${mode === 'edit' ? 'Simpan perubahan' : 'Ya, batalkan transaksi'}</button></div>
+        </form>` : ''}
+        <section class="audit-section" aria-labelledby="jejakJudul"><h3 id="jejakJudul">Jejak perubahan <span class="muted">(${jejak.length})</span></h3>
+          ${jejak.length ? `<ol class="audit-list">${jejak.slice(0, batasJejak).map(j => `<li><strong>${j.tindakan === 'batal' ? 'Dibatalkan' : 'Diedit'} oleh ${esc(j.pelaku)}</strong><p class="small muted">${esc(waktuLengkap(j.waktu))}</p><p><strong>Alasan:</strong> ${esc(j.alasan)}</p><dl class="audit-values"><div><dt>Sebelum</dt><dd>${nf.format(j.sebelum.jumlah)} ${SATUAN} · ${statusTransaksi(j.sebelum)}<p class="small">Catatan: ${esc(j.sebelum.catatan || 'Tidak ada')}</p></dd></div><div><dt>Sesudah</dt><dd>${nf.format(j.sesudah.jumlah)} ${SATUAN} · ${statusTransaksi(j.sesudah)}<p class="small">Catatan: ${esc(j.sesudah.catatan || 'Tidak ada')}</p></dd></div></dl></li>`).join('')}</ol>${jejak.length > batasJejak ? '<button type="button" class="btn btn-secondary" id="jejakLagi">Baca jejak berikutnya</button>' : ''}` : '<p class="small muted">Belum ada edit atau pembatalan tercatat.</p>'}
+        </section>
+      </div>
+      <div class="sheet-foot">${!mode && !dibatalkan && p?.status !== 'arsip' ? '<button type="button" class="btn btn-secondary" id="detailEdit">Edit</button><button type="button" class="btn btn-danger" id="detailBatalkan">Batalkan transaksi</button>' : '<button type="button" class="btn btn-secondary" data-close>Tutup detail</button>'}</div>`;
+    if (!dlg.open) dlg.showModal();
+    $('#detailEdit')?.addEventListener('click', () => bukaDetail(id, 'edit'));
+    $('#detailBatalkan')?.addEventListener('click', () => bukaDetail(id, 'cancel'));
+    $('#detailUrungkan')?.addEventListener('click', () => bukaDetail(id));
+    $('#jejakLagi')?.addEventListener('click', () => bukaDetail(id, mode, batasJejak + 20));
+    const f = $('#detailForm');
+    if (f) {
+      const requestId = idPermintaan();
+      f.addEventListener('submit', async e => {
+        e.preventDefault();
+        const b = $('button[type="submit"]', f);
+        if (b.disabled) return;
+        b.disabled = true;
+        try {
+          await simpanTransaksi({ action: mode, id, version: t.version || 0, requestId, jumlah: mode === 'edit' ? Number($('#detailJumlah').value) : undefined, catatan: mode === 'edit' ? $('#detailCatatan').value : '', alasan: $('#detailAlasan').value });
+          viewLaporan($('#view')); bukaDetail(id);
+          toast(mode === 'edit' ? 'Perubahan tersimpan. Stok dan seluruh tampilan memakai catatan yang sama.' : 'Transaksi dibatalkan. Pengaruh stok dikembalikan satu kali.');
+        } catch (err) {
+          $('#detailError').textContent = err.message; $('#detailError').hidden = false; b.disabled = false;
+          const reason = $('#detailAlasan');
+          (reason.value.trim() ? $('#detailError') : reason).focus();
+        }
+      });
+      (mode === 'edit' ? $('#detailJumlah') : $('#detailAlasan')).focus();
+    } else $('#detailJudul').focus();
+  }
+
+  $('#dlgDetail').addEventListener('close', () => {
+    const trigger = $(`[data-detail="${detailAktif}"]`) || $('#laporanTambah');
+    if (trigger) trigger.focus({ preventScroll: true });
+  });
+  $('#dlgLaporanForm').addEventListener('close', () => {
+    $('#laporanFormIsi').innerHTML = '';
+    $('#laporanTambah')?.focus({ preventScroll: true });
+  });
+  [$('#dlgDetail'), $('#dlgLaporanForm'), $('#dlgProdukAksi')].forEach(dlg => dlg.addEventListener('keydown', e => {
+    if (e.key !== 'Tab') return;
+    const targets = $$('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href], [tabindex="0"]', dlg)
+      .filter(el => el.getClientRects().length > 0);
+    if (!targets.length) return;
+    const first = targets[0], last = targets[targets.length - 1];
+    if (!targets.includes(document.activeElement) || (e.shiftKey && document.activeElement === first) || (!e.shiftKey && document.activeElement === last)) {
+      e.preventDefault(); (e.shiftKey ? last : first).focus();
+    }
+  }));
 
   /* ================= halaman: riwayat ================= */
 
@@ -1222,16 +1469,17 @@
     };
 
     const isi = () => {
-      const cocokProduk = new Set(saringProduk(rCari).map((p) => p.kode));
+      const cocokProduk = new Set(saringProduk(rCari, true).map((p) => p.kode));
       const hasil = transaksiGudang()
         .filter((t) => isDateInRange(t.waktu, rMulai, rAkhir))
         .filter((t) => rJenis === 'semua' || t.jenis === rJenis)
         .filter((t) => !rCari.trim() || cocokProduk.has(t.kode))
         .sort((a, b) => b.waktu.localeCompare(a.waktu));
 
-      const totMasuk = hasil.filter((t) => arahTransaksi(t).tanda === '+').reduce((s, t) => s + t.jumlah, 0);
-      const totKeluar = hasil.filter((t) => arahTransaksi(t).tanda === '−').reduce((s, t) => s + t.jumlah, 0);
-      const jPindah = hasil.filter((t) => t.jenis === 'pindah').length;
+      const aktif = hasil.filter(t => t.status !== 'dibatalkan');
+      const totMasuk = aktif.filter((t) => arahTransaksi(t).tanda === '+').reduce((s, t) => s + t.jumlah, 0);
+      const totKeluar = aktif.filter((t) => arahTransaksi(t).tanda === '−').reduce((s, t) => s + t.jumlah, 0);
+      const jPindah = aktif.filter((t) => t.jenis === 'pindah').length;
       $('#rRingkas').textContent = hasil.length
         ? `${hasil.length} transaksi: ${nf.format(totMasuk)} ${SATUAN} masuk, ${nf.format(totKeluar)} ${SATUAN} keluar${jPindah ? `, termasuk ${jPindah} pindah gudang` : ''}.`
         : 'Tidak ada transaksi di pilihan ini.';
@@ -1264,11 +1512,11 @@
         return `${kepala}
           <tr>
             <td data-label="Jam" class="num">${fJam.format(w)}</td>
-            <td data-label="Jenis"><span class="jenis ${a.kelas}">${esc(a.teks)}</span></td>
+            <td data-label="Jenis"><span class="jenis ${a.kelas}">${esc(a.teks)}</span>${t.status === 'dibatalkan' ? `<br>${statusHTML(t)}` : ''}</td>
             <td data-label="Gudang">${tagGudang(a.gudang)}</td>
             <td data-label="Produk" class="stack"><div class="id-line"><span class="kode">${esc(t.kode)}</span>${p ? specHTML(p) : '<span class="muted">produk tidak ditemukan</span>'}</div></td>
             <td data-label="Catatan" class="catatan-cell">${t.catatan ? esc(t.catatan) : '<span class="muted" aria-label="Tidak ada catatan">-</span>'}</td>
-            <td data-label="Jumlah" class="r"><span class="qty ${a.kelas}">${a.tanda}${nf.format(t.jumlah)}</span> <span class="muted">${SATUAN}</span></td>
+            <td data-label="Jumlah" class="r"><span class="qty ${a.kelas}">${t.status === 'dibatalkan' ? '' : a.tanda}${nf.format(t.jumlah)}</span> <span class="muted">${SATUAN}</span></td>
           </tr>`;
       }).join('');
 
@@ -1337,8 +1585,8 @@
 
   /* ================= router ================= */
 
-  const VIEWS = { dashboard: viewDashboard, produk: viewProduk, transaksi: viewTransaksi, riwayat: viewRiwayat };
-  const JUDUL = { dashboard: 'Dashboard', produk: 'Produk', transaksi: 'Catat transaksi', riwayat: 'Riwayat transaksi' };
+  const VIEWS = { dashboard: viewDashboard, produk: viewProduk, transaksi: viewTransaksi, riwayat: viewRiwayat, laporan: viewLaporan };
+  const JUDUL = { dashboard: 'Dashboard', produk: 'Produk', transaksi: 'Catat transaksi', riwayat: 'Riwayat transaksi', laporan: 'Laporan' };
   let renderPertama = true;
 
   function route() {
@@ -1367,8 +1615,6 @@
   });
   $$('dialog').forEach((d) => d.addEventListener('click', (e) => { if (e.target === d) d.close(); }));
 
-  $('#syncBtn').addEventListener('click', bukaSync);
-
   $('#pilihGudang').addEventListener('change', (e) => {
     gudangAktif = e.target.value;
     try { localStorage.setItem(KUNCI_GUDANG, gudangAktif); } catch (err) { /* abaikan */ }
@@ -1378,26 +1624,25 @@
   });
 
   $('#btnDemo').addEventListener('click', () => {
-    $$('input[name="demoSheets"]').forEach((r) => { r.checked = r.value === state.sheets.status; });
     $('#dlgDemo').showModal();
   });
-  $$('input[name="demoSheets"]').forEach((r) => r.addEventListener('change', () => {
-    state.sheets = r.value === 'gagal'
-      ? { ...state.sheets, status: 'gagal', tertunda: Math.max(state.sheets.tertunda, 3) }
-      : { status: 'ok', tertunda: 0, terakhir: new Date().toISOString() };
-    simpan(); renderSync();
-  }));
-  $('#demoKosong').addEventListener('click', () => {
-    state = { produk: [], stok: [], transaksi: [], sheets: state.sheets };
-    bangunIndeks();
-    simpan(); $('#dlgDemo').close(); route();
-    toast('Semua data dikosongkan. Sekarang tampilan kosong bisa dicoba.');
-  });
-  $('#demoReset').addEventListener('click', () => {
-    state = dataContoh();
-    bangunIndeks();
-    simpan(); renderSync(); $('#dlgDemo').close(); route();
-    toast('Data contoh dikembalikan.');
+  async function aturDemo(empty) {
+    try {
+      await simpanPerubahan(() => empty ? { produk: [], stok: [], transaksi: [] } : dataContoh(), true);
+      $('#dlgDemo').close(); route();
+      toast(empty ? 'Data demo dikosongkan.' : 'Data contoh dikembalikan.');
+    } catch (err) { toast(esc(err.message)); }
+  }
+  $('#demoKosong').addEventListener('click', () => aturDemo(true));
+  $('#demoReset').addEventListener('click', () => aturDemo(false));
+
+  window.addEventListener('storage', e => {
+    if (e.key !== KUNCI_SIMPAN) return;
+    try {
+      state = dataTerbaru(); bangunIndeks();
+      if (!$('dialog[open]') && !$('#txForm')) route();
+      toast('Data diperbarui di tab lain. Form yang terbuka tetap diperiksa versinya saat disimpan.');
+    } catch (err) { toast(esc(err.message)); }
   });
 
   window.addEventListener('hashchange', route);
@@ -1407,7 +1652,6 @@
     if (a && a.getAttribute('href') === location.hash && !e.defaultPrevented) { e.preventDefault(); route(); }
   });
   renderPilihGudang();
-  renderSync();
   route();
   if (dataRusak) {
     toast('Data tersimpan di browser ini tidak terbaca, jadi data contoh dimuat. Salinan data lama disimpan terpisah.');
